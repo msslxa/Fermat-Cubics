@@ -1,0 +1,1025 @@
+// FerParCh2;
+// INPUT: a natural numbers n, and a field FF of characteristic 2;
+// OUTPUT: a birational parametrization f: P^{2n} ---> P^{2n+1} of the Fermat cubic hypersurface of dimension 2n over the field FF and its inverse.
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+FerParCh2 := function(n,FF)
+Pt<[u]> := ProjectiveSpace(FF,2*n);
+R := CoordinateRing(Pt);
+Pp := &+[u[i]^3 : i in [1..2*n+1]];
+Q := &+[u[2*i+1]^2*u[2*i+2]+u[2*i+1]*u[2*i+2]^2+u[2*i+2]^3 : i in [0..n-1]];
+g1 := [R!0 : i in [1..2*n+2]];
+for i in [0..n-1] do
+p := (u[2*i+1]+u[2*i+2])*Pp+u[2*i+1]*Q;
+g1 := Remove(g1,2*i+1);
+g1 := Insert(g1,2*i+1,p);
+end for;
+g2 := [R!0 : i in [1..2*n+2]];
+for j in [0..n-1] do
+p := u[2*j+1]*Pp+u[2*j+2]*Q;
+g2 := Remove(g2,2*j+2);
+g2 := Insert(g2,2*j+2,p);
+end for;
+g := [R!0 : i in [1..2*n+2]];
+for j in [1..2*n+2] do
+g := Remove(g,j);
+g := Insert(g,j,g1[j]+g2[j]);
+end for;
+g := Remove(g,2*n+1);
+g := Insert(g,2*n+1,u[2*n+1]*(Pp+Q));
+g := Remove(g,2*n+2);
+g := Insert(g,2*n+2,u[2*n+1]*Pp);
+P<[x]> := ProjectiveSpace(FF,#g-1);
+f := map<Pt->P | g>;
+X := Image(f);
+f := map<Pt->X | DefiningEquations(f)>;
+RP := CoordinateRing(P);
+g1 := [RP!0 : i in [1..2*n+1]];
+for i in [0..n-1] do
+p := x[2*i+1]*x[2*n+1]-x[2*i+1]*x[2*n+2]+x[2*i+2]*x[2*n+2];
+g1 := Remove(g1,2*i+1);
+g1 := Insert(g1,2*i+1,p);
+end for;
+g2 := [RP!0 : i in [1..2*n+1]];
+for i in [0..n-1] do
+p := x[2*i+2]*x[2*n+1]-x[2*i+1]*x[2*n+2];
+g2 := Remove(g2,2*i+2);
+g2 := Insert(g2,2*i+2,p);
+end for;
+g := [RP!0 : i in [1..2*n+1]];
+for j in [1..2*n] do
+g := Remove(g,j);
+g := Insert(g,j,g1[j]+g2[j]);
+end for;
+g := Remove(g,2*n+1);
+g := Insert(g,2*n+1,x[2*n+1]^2-x[2*n+1]*x[2*n+2]+x[2*n+2]^2);
+h := map<X->Pt | g>;
+return f,h;
+end function;
+
+// Example
+FF := GF(2^5);
+n := 3;
+f,h := FerParCh2(n,FF);
+r := f*h;
+r := Normalization(map<Domain(r)->Codomain(r) | DefiningEquations(r)>);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// BLFerParCh2;
+// INPUT: a natural numbers n, and a field FF of characteristic 2;
+// OUTPUT: the base locus of the birational parametrization f: P^{2n} ---> P^{2n+1} of the Fermat cubic hypersurface of dimension 2n over the field FF given by FerParCh2.
+
+BLFerParCh2 := function(n,FF)
+Pt<[u]> := ProjectiveSpace(FF,2*n);
+Pp := &+[u[i]^3 : i in [1..2*n+1]];
+Q := &+[u[2*i+1]^2*u[2*i+2]+u[2*i+1]*u[2*i+2]^2+u[2*i+2]^3 : i in [0..n-1]];
+BL := Scheme(Pt,[Pp,Q]);
+return BL;
+end function;
+
+// Example
+FF := GF(2^5);
+n := 3;
+BL := BLFerParCh2(n,FF);
+BL;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// BLinvFerParCh2;
+// INPUT: a natural numbers n, and a field FF of characteristic 2;
+// OUTPUT: the base locus of the map h: X^{2n} ---> P^{2n} given by FerParCh2.
+
+BLinvFerParCh2 := function(n,FF)
+f,h := FerParCh2(n,FF);
+BL := BaseScheme(h);
+return BL;
+end function;
+
+// Example
+FF := GF(2^5);
+n := 3;
+BL := BLinvFerParCh2(n,FF);
+IRR := IrreducibleComponents(BL);
+[Dimension(Z) : Z in IRR];
+[Degree(Z) : Z in IRR];
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// FerPar;
+// INPUT: a natural numbers n, and a field FF of characteristic different from 2 and 3;
+// OUTPUT: a birational parametrization f: P^{2n} ---> P^{2n+1} of the Fermat cubic hypersurface of dimension 2n over the field FF.
+
+FerPar := function(n,FF)
+Ps<[u]> := ProjectiveSpace(FF,2*n);
+R := CoordinateRing(Ps);
+A := &+[u[2*j]^3+3*u[2*j]^2*u[2*j+1]+3*u[2*j]*u[2*j+1]^2+9*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
+B := &+[u[2*j]^3-u[2*j]^2*u[2*j+1]+3*u[2*j]*u[2*j+1]^2-3*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
+g1 := [R!0 : i in [1..2*n+2]];
+for j in [0..n-1] do
+p := ((u[2*j+2]-3*u[2*j+3])*A - (3*u[2*j+2]+3*u[2*j+3])*B)/2;
+g1 := Remove(g1,2*j+2);
+g1 := Insert(g1,2*j+1,p);
+end for;
+g2 := [R!0 : i in [1..2*n+2]];
+for j in [0..n-1] do
+p := u[2*j+2]*A - 3*u[2*j+3]*B;
+g2 := Remove(g2,2*j+2);
+g2 := Insert(g2,2*j+2,p);
+end for;
+g := [R!0 : i in [1..2*n+2]];
+for j in [1..2*n+2] do
+g := Remove(g,j);
+g := Insert(g,j,g1[j]+g2[j]);
+end for;
+g := Remove(g,2*n+1);
+g := Insert(g,2*n+1,(u[1]*A-3*u[1]*B)/2);
+g := Remove(g,2*n+2);
+g := Insert(g,2*n+2,u[1]*A);
+P<[x]> := ProjectiveSpace(FF,#g-1);
+f := map<Ps->P | g>;
+X := Image(f);
+f := map<Ps->X | DefiningEquations(f)>;
+ll := [];
+for i in [0..n] do
+ll := Append(ll,x[2*i+1]^2-x[2*i+1]*x[2*i+2]+x[2*i+2]^2);
+end for;
+for i in [0..n-1] do
+for j in [i..n-1] do
+ll := Append(ll,x[2*i+1]*x[2*j+3]-x[2*i+1]*x[2*j+4]+x[2*i+2]*x[2*j+4]);
+end for;
+end for;
+for i in [1..n] do
+for j in [i..n] do
+ll := Append(ll,x[2*i]*x[2*j+1]-x[2*i-1]*x[2*j+2]);
+end for;
+end for;
+Hpm := Scheme(P,ll);
+Y := Scheme(P,[x[2*n+1],x[2*n+2]]) meet X;
+J := IrrelevantIdeal(P);
+B2 := [f : f in Basis(Ideal(Y) meet Ideal(Hpm) meet J^2) | Degree(f) eq 2];
+h := map<X->Ps | B2>;
+hh :=[R!0 : i in [1..2*n+1]];
+for i in [1..n] do
+hh := Remove(hh,2*i);
+hh := Insert(hh,2*i,2*u[2*i-1]-u[2*i]);
+hh := Remove(hh,2*i+1);
+hh := Insert(hh,2*i+1,u[2*i]);
+end for;
+hh := Remove(hh,1);
+hh := Insert(hh,1,2*u[2*n+1]);
+aut := map<Ps->Ps | hh>;
+h := h*aut;
+h := map<Domain(h)->Codomain(h) | DefiningEquations(h)>;
+return f,h;
+end function;
+
+// Example
+FF := Rationals();
+n := 3;
+f,h := FerPar(n,FF);
+r := f*h;
+r := Normalization(map<Domain(r)->Codomain(r) | DefiningEquations(r)>);
+
+// Example (Birational parametrization of the Fermat cubic surface in P^3 over the rationals)
+n := 1;
+FF := Rationals();
+f := FerPar(n,FF);
+X := Image(f);
+
+// Example (Birational parametrization of the Fermat cubic 4-fold in P^5 over the rationals)
+n := 2;
+FF := Rationals();
+f := FerPar(n,FF);
+X := Image(f);
+
+// Example (Birational parametrization of the Fermat cubic 6-fold in P^7 over F_13)
+n := 3;
+FF := GF(13);
+f := FerPar(n,FF);
+X := Image(f);
+
+// Example (Birational parametrization of the Fermat cubic 8-fold in P^9 over F_5)
+n := 4;
+FF := GF(5);
+f := FerPar(n,FF);
+X := Image(f);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// BLFerPar;
+// INPUT: a natural numbers n, and a field FF of characteristic different from 2 and 3;
+// OUTPUT: the base locus of the birational parametrization f: P^{2n} ---> P^{2n+1} of the Fermat cubic hypersurface of dimension 2n over the field FF given by FerPar.
+
+BLFerPar := function(n,FF)
+Ps<[u]> := ProjectiveSpace(FF,2*n);
+R := CoordinateRing(Ps);
+A := &+[u[2*j]^3+3*u[2*j]^2*u[2*j+1]+3*u[2*j]*u[2*j+1]^2+9*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
+B := &+[u[2*j]^3-u[2*j]^2*u[2*j+1]+3*u[2*j]*u[2*j+1]^2-3*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
+BL := Scheme(Ps,[A,B]);
+return BL;
+end function;
+
+// Example
+n := 2;
+FF := Rationals();
+BL := BLFerPar(n,FF);
+BL;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// BLinvFerPar;
+// INPUT: a natural numbers n, and a field FF of characteristic different from 2 and 3;
+// OUTPUT: the base locus of the map h: X^{2n} ---> P^{2n} given by FerPar.
+
+BLinvFerPar := function(n,FF)
+f,h := FerPar(n,FF);
+BL := BaseScheme(h);
+return BL;
+end function;
+
+// Example
+FF := Rationals();
+n := 2;
+BL := BLinvFerPar(n,FF);
+IRR := IrreducibleComponents(BL);
+[Dimension(Z) : Z in IRR];
+[Degree(Z) : Z in IRR];
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// SingBL;
+// INPUT: a natural numbers n, and a field FF of characteristic different from 2 and 3;
+// OUTPUT: a pair SBL, RSBL where SBL is the singular locus of the base locus of the birational parametrization f: P^{2n} ---> P^{2n+1} of the Fermat cubic hypersurface of dimension 2n over the field FF given by FerPar, and RSBL is the reduced subscheme of SBL.
+
+SingBL := function(n,FF)
+Ps<[u]> := ProjectiveSpace(FF,2*n);
+R := CoordinateRing(Ps);
+A := &+[u[2*j]^3+3*u[2*j]^2*u[2*j+1]+3*u[2*j]*u[2*j+1]^2+9*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
+B := &+[u[2*j]^3-u[2*j]^2*u[2*j+1]+3*u[2*j]*u[2*j+1]^2-3*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
+BL := Scheme(Ps,[A,B]);
+SBL := SingularSubscheme(BL);
+RSBL := ReducedSubscheme(SBL);
+return SBL,RSBL;
+end function;
+
+// Example
+n := 2;
+FF := Rationals();
+SBL,RSBL := SingBL(n,FF);
+SBL;
+RSBL;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// PBL;
+// INPUT: a natural numbers n, and a field FF of characteristic different from 2 and 3;
+// OUTPUT: four schemes PBL, PRSBL, S2, S3 where PBL is the projection from [0:...:0:1] of the base locus of the birational parametrization f: P^{2n} ---> P^{2n+1} of the Fermat cubic hypersurface of dimension 2n over the field FF given by FerPar, PRSBL is the projection from [0:...:0:1] of the reduced singular locus of BL, S2 is the locus of points of multiplcity at least three of PBL, and S3 is the locus of points of multiplcity at least four of PBL.
+
+PBL := function(n,FF)
+Ps<[u]> := ProjectiveSpace(FF,2*n);
+R := CoordinateRing(Ps);
+A := &+[u[2*j]^3+3*u[2*j]^2*u[2*j+1]+3*u[2*j]*u[2*j+1]^2+9*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
+B := &+[u[2*j]^3-u[2*j]^2*u[2*j+1]+3*u[2*j]*u[2*j+1]^2-3*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
+BL := Scheme(Ps,[A,B]);
+SBL := SingularSubscheme(BL);
+RSBL := ReducedSubscheme(SBL);
+Pt<[v]> := ProjectiveSpace(FF,2*n-1);
+proj := map<Ps->Pt | [u[i] : i in [1..2*n]]>;
+PBL := proj(BL);
+PRSBL := proj(RSBL);
+F := DefiningEquations(PBL)[1];
+Der1 := [Derivative(F,i) : i in [1..2*n]];
+Der2 := [];
+for P in Der1 do
+for i in [1..2*n] do
+Der2 := Append(Der2,Derivative(P,i));
+end for;
+end for;
+Der2 := Setseq(Set(Der2));
+S2 := Scheme(Pt,Der2);
+Der3 := [];
+for P in Der2 do
+for i in [1..2*n] do
+Der3 := Append(Der3,Derivative(P,i));
+end for;
+end for;
+Der3 := Setseq(Set(Der3));
+S3 := Scheme(Pt,Der3);
+return PBL,PRSBL,S2,S3;
+end function;
+
+// Example
+for n in [1..3] do
+X,Y,S2,S3 := PBL(n,Rationals());
+IsSubscheme(Y,S2);
+IsSubscheme(Y,S3);
+end for;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Quart;
+// INPUT: a natural numbers n, and a field FF of characteristic different from 2 and 3;
+// OUTPUT: four objects BQ, g, Y, iaut where BQ is a basis of the linear system of quartic containing BL and having multiplcity two along RSBL, g is the rational map induced by BQ, Y is the image of g and iaut is the automorphism of the ambient projective space transforming Y in the Fermat cubic.
+
+Quart := function(n,FF)
+Ps<[u]> := ProjectiveSpace(FF,2*n);
+R := CoordinateRing(Ps);
+A := &+[u[2*j]^3+3*u[2*j]^2*u[2*j+1]+3*u[2*j]*u[2*j+1]^2+9*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
+B := &+[u[2*j]^3-u[2*j]^2*u[2*j+1]+3*u[2*j]*u[2*j+1]^2-3*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
+BL := Scheme(Ps,[A,B]);
+SBL := SingularSubscheme(BL);
+RSBL := ReducedSubscheme(SBL);
+J := IrrelevantIdeal(Ps);
+BQ := [f : f in Basis(Ideal(BL) meet Ideal(RSBL)^2 meet J^4) | Degree(f) eq 4];
+Pt<[x]> := ProjectiveSpace(FF,2*n+1);
+g := map<Ps->Pt | BQ>;
+Y := Image(g);
+ilist := [-x[1]-3*x[4],x[1]-3*x[4],x[2]+3*x[3],-x[2]+3*x[3]];
+for i in [2..n] do 
+ilist := Append(ilist,-x[2*i+1]-3*x[2*i+2]);
+ilist := Append(ilist,x[2*i+1]-3*x[2*i+2]);
+end for;
+iaut := map<Pt->Pt | ilist>;
+X := iaut(Y);
+return BQ,g,Y,iaut;
+end function;
+
+// Example
+FF := Rationals();
+n := 6;
+BQ,g,Y,iaut := Quart(n,FF);
+X := iaut(Y);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// NMD;
+// INPUT: a natural numbers n > 2, and a field FF of characteristic different from 2 and 3;
+// OUTPUT: the polynomials M_2n, N_2n and D_2n.
+
+NMD := function(n,FF)
+A<[t]> := AffineSpace(FF,2*n);
+
+D2 := 2*t[1]^4 - 4*t[1]*t[2]^3 + 4*t[1]^3 - 2*t[2]^3 + 6*t[1]^2 + 4*t[1] + 2;
+D4 := 2*(t[1]^4*t[4]^3 - 3*t[1]^3*t[2]*t[3]*t[4]^2 + 3*t[1]^2*t[2]^2*t[3]^2*t[4] - t[1]*t[2]^3*t[3]^3 + 2*t[1]^3*t[4]^3 - 3*t[1]^2*t[2]*t[3]*t[4]^2 + t[2]^3*t[3]^3 + 3*t[1]^2*t[4]^3 - 3*t[1]*t[2]*t[3]*t[4]^2 - t[1]^4 + 2*t[1]*t[2]^3 + 2*t[1]*t[4]^3 - 2*t[1]^3 + t[2]^3 + t[4]^3 - 3*t[1]^2 - 2*t[1] - 1);
+
+listD := [D2,D4];
+
+for i in [3..n] do
+D2ip := 2*t[1]^4*t[2*i]^3 - 6*t[1]^3*t[2*i-1]*t[2]*t[2*i]^2 + 6*t[1]^2*t[2*i-1]^2*t[2]^2*t[2*i] - 2*t[1]*t[2*i-1]^3*t[2]^3 + 4*t[1]^3*t[2*i]^3 - 6*t[1]^2*t[2*i-1]*t[2]*t[2*i]^2 + 2*t[2*i-1]^3*t[2]^3 + 6*t[1]^2*t[2*i]^3 - 6*t[1]*t[2*i-1]*t[2]*t[2*i]^2 + 4*t[1]*t[2*i]^3 + 2*t[2*i]^3;
+
+D2i := D2ip + listD[i-1];
+listD := Append(listD,D2i);
+end for;
+D2n := listD[# listD];
+
+N2 := -t[1]^4 - 2*t[1]^3 + t[2]^3 - 3*t[1]^2 - 2*t[1] - 1;
+N4 := 3*t[1]^2 + t[1]^4 + 2*t[1] - t[2]^3 + 2*t[1]^3 - t[4]^3 - 2*t[2]^2*t[3]^2*t[4] + 2*t[2]*t[3]*t[4]^2 + t[1]*t[2]^3*t[3]^3 - 4*t[1]*t[2]^2*t[3]^2*t[4] - 3*t[1]^2*t[2]^2*t[3]^2*t[4] + 5*t[1]^2*t[2]*t[3]*t[4]^2 + 5*t[1]*t[2]*t[3]*t[4]^2 + 3*t[1]^3*t[2]*t[3]*t[4]^2 + t[2]^3*t[3]^3 - t[1]^4*t[4]^3 - 2*t[1]^3*t[4]^3 - 3*t[1]^2*t[4]^3 - 2*t[1]*t[4]^3 + 1;
+
+listN := [N2,N4];
+
+for i in [3..n] do
+N2ip := t[2]^3*t[2*i-1]^3-2*t[1]^3*t[2*i]^3 - t[1]^4*t[2*i]^3 - 2*t[1]*t[2*i]^3 - 3*t[1]^2*t[2*i]^3 - t[2*i]^3 + t[1]*t[2]^3*t[2*i-1]^3 + 2*t[2]*t[2*i-1]*t[2*i]^2 - 2*t[2]^2*t[2*i-1]^2*t[2*i] + 3*t[1]^3*t[2]*t[2*i-1]*t[2*i]^2 + 5*t[1]^2*t[2]*t[2*i-1]*t[2*i]^2 + 5*t[1]*t[2]*t[2*i-1]*t[2*i]^2 - 3*t[1]^2*t[2]^2*t[2*i-1]^2*t[2*i] - 4*t[1]*t[2]^2*t[2*i-1]^2*t[2*i];
+
+N2i := N2ip + listN[i-1];
+listN := Append(listN,N2i);
+end for;
+
+N2n := listN[# listN];
+
+M2 := t[1]^4 - 2*t[1]*t[2]^3 + 2*t[1]^3 - t[2]^3 + 3*t[1]^2 + 2*t[1] + 1;
+M4 := -t[1]*t[2]^3*t[3]^3 - t[1]^4 + 2*t[1]*t[2]^3 - 2*t[1]^3 + t[2]^3 - 3*t[1]^2 - 2*t[1] + t[1]^4*t[4]^3 + 2*t[1]^3*t[4]^3 + t[2]^3*t[3]^3 + 3*t[1]^2*t[4]^3 + 2*t[1]*t[4]^3 - 3*t[1]^3*t[2]*t[3]*t[4]^2 + 3*t[1]^2*t[2]^2*t[3]^2*t[4] - 3*t[1]^2*t[2]*t[3]*t[4]^2 - 3*t[1]*t[2]*t[3]*t[4]^2 + t[4]^3-1;
+
+listM := [M2,M4];
+
+for i in [3..n] do
+M2ip := t[2*i]^3 - 3*t[1]^3*t[2]*t[2*i-1]*t[2*i]^2 + 3*t[1]^2*t[2]^2*t[2*i-1]^2*t[2*i] - t[1]*t[2]^3*t[2*i-1]^3 - 3*t[1]^2*t[2]*t[2*i-1]*t[2*i]^2 - 3*t[1]*t[2]*t[2*i-1]*t[2*i]^2 + t[1]^4*t[2*i]^3 + 2*t[1]^3*t[2*i]^3 + t[2]^3*t[2*i-1]^3 + 3*t[1]^2*t[2*i]^3 + 2*t[1]*t[2*i]^3;
+
+M2i := M2ip + listM[i-1];
+listM := Append(listM,M2i);
+end for;
+
+M2n := listM[# listM];
+return N2n,M2n,D2n;
+end function;
+
+// Example
+n := 4;
+FF := Rationals();
+N2n,M2n,D2n := NMD(n,FF);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Cr;
+// INPUT: a natural numbers n > 2, and a field FF of characteristic different from 2 and 3;
+// OUTPUT: the quadro-cubic Cremona transformation cr: P^{2n} ---> P^{2n} over the field FF and its inverse.
+
+Cr := function(n,FF)
+Ps<[u]> := ProjectiveSpace(FF,2*n);
+Pst<[t]> := ProjectiveSpace(FF,2*n);
+R := CoordinateRing(Pst);
+cr1 := -2*(t[2]^2*t[1]+t[2]*t[1]^2+t[1]^3);
+cr2 := 2*t[3]*t[1]^2+t[1]*t[2]*t[3];
+g1 := [R!0 : i in [1..2*n+1]];
+for j in [1..n] do
+p := t[1]*t[3]*t[2*j];
+g1 := Remove(g1,2*j+1);
+g1 := Insert(g1,2*j+1,p);
+end for;
+g1 := Remove(g1,1);
+g1 := Insert(g1,1,cr1);
+g1 := Remove(g1,2);
+g1 := Insert(g1,2,cr2);
+g2 := [R!0 : i in [1..2*n+1]];
+for j in [1..n-1] do
+p := -t[1]*t[3]*t[2*j+2]-2*t[2]*t[3]*t[2*j+2]+2*t[1]^2*t[2*j+3]+2*t[2]^2*t[2*j+3]+2*t[1]*t[2]*t[2*j+3];
+g2 := Remove(g2,2*j+2);
+g2 := Insert(g2,2*j+2,p);
+end for;
+g := [R!0 : i in [1..2*n+1]];
+for j in [1..2*n+1] do
+g := Remove(g,j);
+g := Insert(g,j,g1[j]+g2[j]);
+end for;
+cr := map<Pst->Ps | g>;
+Ru := CoordinateRing(Ps);
+invcr1 := -u[1]*u[2] + u[1]*u[3];
+invcr2 := -2*u[1]*u[3];
+invcr3 := u[2]^2 + 3*u[3]^2;
+g1 := [Ru!0 : i in [1..2*n+1]];
+for i in [0..n-1] do
+p := -2*u[1]*u[2*i+3];
+g1 := Remove(g1,2*i+2);
+g1 := Insert(g1,2*i+2,p);
+end for;
+g1 := Remove(g1,1);
+g1 := Insert(g1,1,invcr1);
+g1 := Remove(g1,2);
+g1 := Insert(g1,2,invcr2);
+g1 := Remove(g1,3);
+g1 := Insert(g1,3,invcr3);
+g2 := [Ru!0 : i in [1..2*n+1]];
+for j in [0..n-2] do
+p := u[2]*u[2*j+4] - u[3]*u[2*j+4] + u[2]*u[2*j+5] + 3*u[3]*u[2*j+5];
+g2 := Remove(g2,2*j+5);
+g2 := Insert(g2,2*j+5,p);
+end for;
+g := [Ru!0 : i in [1..2*n+1]];
+for j in [1..2*n+1] do
+g := Remove(g,j);
+g := Insert(g,j,g1[j]+g2[j]);
+end for;
+invcr := map<Ps->Pst | g>;
+return cr,invcr;
+end function;
+
+// Example
+n := 2;
+FF := Rationals();
+cr,invcr := Cr(n,FF);
+f := cr*invcr;
+g := invcr*cr;
+f := map<Domain(f)->Codomain(f) | DefiningEquations(f)>;
+g := map<Domain(g)->Codomain(g) | DefiningEquations(g)>;
+f := Normalization(f);
+g := Normalization(g);
+
+// Related scripts
+// Reduced components of the base loci of cr and invcr
+
+Bcrnr := BaseScheme(cr);
+Bcr := ReducedSubscheme(BaseScheme(cr));
+Binvcr := ReducedSubscheme(BaseScheme(invcr));
+RCompcr := IrreducibleComponents(Bcr);
+RCompinvcr := IrreducibleComponents(Binvcr);
+
+// Linear system of cubics inducing cr
+
+Ps := Domain(cr);
+Pt := Codomain(cr);
+T1 := Scheme(Ps,DefiningEquations(RCompcr[1])); 
+T2 := Scheme(Ps,DefiningEquations(RCompcr[2]));
+T3 := ReducedSubscheme(IrreducibleComponents(Bcrnr)[4]);
+T4 := Scheme(Ps,DefiningEquations(RCompcr[3]));
+JPs := IrrelevantIdeal(Ps);
+B3 := [f : f in Basis(Ideal(T1) meet Ideal(T2) meet Ideal(T4) meet Ideal(T3)^2 meet JPs^3) | Degree(f) eq 3];
+f3 := map<Ps->Pt | B3>;
+
+// Linear system of quadrics containig the union of the U_i for i = 1,2,3,4
+
+Ps := Codomain(invcr);
+Pt := Domain(invcr);
+U1 := Scheme(Pt,[DefiningEquations(RCompinvcr[3])[1],DefiningEquations(RCompinvcr[3])[2]]);
+if n eq 2 then U2 := Scheme(Pt,DefiningEquations(RCompinvcr[1])); 
+else U2 := Scheme(Pt,DefiningEquations(RCompinvcr[2]));
+end if;
+JPt := IrrelevantIdeal(Pt);
+B2 := [f : f in Basis(Ideal(U1) meet Ideal(U2) meet JPt^2) | Degree(f) eq 2];
+f2 := map<Pt->Ps | B2>;
+ 
+// Random quadric in the linear system of invcr
+
+Dinvcr := DefiningEquations(invcr);
+Qinvcr := Scheme(Pt,&+[Random(FF,10)*b : b in Dinvcr]);
+SQinvcr := SingularSubscheme(Qinvcr);
+Dimension(SQinvcr);
+IsSubscheme(SQinvcr,U1);
+
+for i in [1..100] do
+Qinvcr := Scheme(Pt,&+[Random(FF,100)*b : b in B2]);
+SQinvcr := SingularSubscheme(Qinvcr);
+Dimension(SQinvcr);
+IsSubscheme(SQinvcr,U1);
+end for;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// D8Par;
+// INPUT: a natural numbers n >= 2, and a field FF of characteristic different from 2 and 3;
+// OUTPUT: the birational paramatrization h: P^{2n} ---> X^n given by polynomials of degree 8.
+
+D8Par := function(n,FF)
+Ps<[u]> := ProjectiveSpace(FF,2*n);
+R := CoordinateRing(Ps);
+A := &+[u[2*j]^3+3*u[2*j]^2*u[2*j+1]+3*u[2*j]*u[2*j+1]^2+9*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
+B := &+[u[2*j]^3-u[2*j]^2*u[2*j+1]+3*u[2*j]*u[2*j+1]^2-3*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
+g1 := [R!0 : i in [1..2*n+2]];
+for j in [0..n-1] do
+p := ((u[2*j+2]-3*u[2*j+3])*A - (3*u[2*j+2]+3*u[2*j+3])*B)/2;
+g1 := Remove(g1,2*j+2);
+g1 := Insert(g1,2*j+1,p);
+end for;
+g2 := [R!0 : i in [1..2*n+2]];
+for j in [0..n-1] do
+p := u[2*j+2]*A - 3*u[2*j+3]*B;
+g2 := Remove(g2,2*j+2);
+g2 := Insert(g2,2*j+2,p);
+end for;
+g := [R!0 : i in [1..2*n+2]];
+for j in [1..2*n+2] do
+g := Remove(g,j);
+g := Insert(g,j,g1[j]+g2[j]);
+end for;
+g := Remove(g,2*n+1);
+g := Insert(g,2*n+1,(u[1]*A-3*u[1]*B)/2);
+g := Remove(g,2*n+2);
+g := Insert(g,2*n+2,u[1]*A);
+Pt<[x]> := ProjectiveSpace(FF,#g-1);
+f := map<Ps->Pt | g>;
+R := CoordinateRing(Ps);
+A := &+[u[2*j]^3+3*u[2*j]^2*u[2*j+1]+3*u[2*j]*u[2*j+1]^2+9*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
+B := &+[u[2*j]^3-u[2*j]^2*u[2*j+1]+3*u[2*j]*u[2*j+1]^2-3*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
+BL := Scheme(Ps,[A,B]);
+Pst<[t]> := ProjectiveSpace(FF,2*n);
+R := CoordinateRing(Pst);
+cr1 := -2*(t[2]^2*t[1]+t[2]*t[1]^2+t[1]^3);
+cr2 := 2*t[3]*t[1]^2+t[1]*t[2]*t[3];
+g1 := [R!0 : i in [1..2*n+1]];
+for j in [1..n] do
+p := t[1]*t[3]*t[2*j];
+g1 := Remove(g1,2*j+1);
+g1 := Insert(g1,2*j+1,p);
+end for;
+g1 := Remove(g1,1);
+g1 := Insert(g1,1,cr1);
+g1 := Remove(g1,2);
+g1 := Insert(g1,2,cr2);
+g2 := [R!0 : i in [1..2*n+1]];
+for j in [1..n-1] do
+p := -t[1]*t[3]*t[2*j+2]-2*t[2]*t[3]*t[2*j+2]+2*t[1]^2*t[2*j+3]+2*t[2]^2*t[2*j+3]+2*t[1]*t[2]*t[2*j+3];
+g2 := Remove(g2,2*j+2);
+g2 := Insert(g2,2*j+2,p);
+end for;
+g := [R!0 : i in [1..2*n+1]];
+for j in [1..2*n+1] do
+g := Remove(g,j);
+g := Insert(g,j,g1[j]+g2[j]);
+end for;
+cr := map<Pst->Ps | g>;
+h := cr*f;
+Dh := DefiningEquations(h);
+h := Normalization(map<Pst->Pt | Dh>);
+return h;
+end function;
+
+// Example
+FF := Rationals();
+n := 4;
+h := D8Par(n,FF);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// The following script produces the family of degree five del Pezzo surface S_t degenerating the the reducible surface S_0 give by the union of the Fermat cubic surface and two conjugate planes, and the family X_t of cubic 4-folds containing S_t and specializing to the fermat cubic 4-fold X_0.
+
+FF<t> := FunctionField(Rationals());
+P<u0,u1,u2> := ProjectiveSpace(FF,2);
+
+f0 := -u0^3*u1 - u1^4 - 3*u0^3*u2 - 6*u1^2*u2^2 - 9*u2^4;
+f1 := u0^3*u1 + u1^4 - 3*u0^3*u2 + 6*u1^2*u2^2 + 9*u2^4;
+f2 := -u0^4 - u0*u1^3 + 3*u0*u1^2*u2 - 3*u0*u1*u2^2 + 9*u0*u2^3;
+f3 := u0^4 + u0*u1^3 + 3*u0*u1^2*u2 + 3*u0*u1*u2^2 + 9*u0*u2^3;
+
+f4 := t*(u0^4 - u1^4 - 6*u1^2*u2^2 - 9*u2^4);
+f5 := t*(u0^3*u1 + u1^4 + 6*u1^2*u2^2 + 9*u2^4);
+f6 := t*(u0^2*u1^2 - u1^4 + 3*u0^2*u2^2 - 6*u1^2*u2^2 - 9*u2^4);
+f7 := t*(u0*u1^3 + u1^4 + 3*u0*u1*u2^2 + 6*u1^2*u2^2 + 9*u2^4);
+f8 := t*(u0^3*u2);
+f9 := t*(u0*u1^2*u2 + 3*u0*u2^3);
+
+P9<z0,z1,z2,z3,z4,z5,z6,z7,z8,z9> := ProjectiveSpace(FF,9);
+f := map<P->P9 | [f0,f1,f2,f3,f4,f5,f6,f7,f8,f9]>;
+Yt := f(P);
+
+P5<x0,x1,x2,x3,x4,x5> := ProjectiveSpace(FF,5);
+pr := map<P9->P5 | [z0,z2,z1,z3,z4,z6]>;
+g := f*pr;
+Xt := Scheme(P5,x0^3 + x1^3 + x2^3 + x3^3 + t*x1*x4^2 + x4^3 + t*x2*x4*x5 - t*x1*x5^2 + t*x2*x5^2 + x5^3);
+St := pr(Yt);
+IsSubscheme(St,Xt);
+J := IrrelevantIdeal(P5);
+B2 := [f : f in Basis(Ideal(St) meet J^2) | Degree(f) eq 2];
+P4<u0,u1,u2,u3,u4> := ProjectiveSpace(FF,4);
+qoppa := map<Xt->P4 | B2>;
+IsInvertible(qoppa);
+f := Inverse(qoppa);
+Df := ClearDenominators(DefiningEquations(f));
+Bf := BaseScheme(f);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// St;
+// INPUT: a rational numbers u;
+// OUTPUT: the fiber Su of the family of degree five del Pezzo surfaces S_t over t = u.
+
+St := function(u)
+FF := Rationals();
+A<y0,y1,y2,y3,y4,y5,t> := AffineSpace(FF,7);
+C := y0^3 + y1^3 + y2^3 + y3^3 + y4^3 + y5^3 + t*y1*y4^2  + t*y2*y4*y5 - t*y1*y5^2 + t*y2*y5^2;
+Q1 := t*y0^2 - t*y0*y2 + t*y1*y2 + t*y2^2 + t*y0*y3 - t*y2*y3 - y0*y4 + 2*y2*y4 + y1*y5 - 2*y3*y5;
+Q2 := t*y0*y1 - t*y2*y3 + y0*y4 + y2*y4 - y1*y5 - y3*y5;
+Q3 := t^2*y1^2 + t^2*y1*y2 + t^2*y0*y3 - t^2*y1*y3 - t^2*y2*y3 + t^2*y3^2 - t*y0*y4 + 2*t*y2*y4 - 3*y4^2 + 3*t*y0*y5 + t*y1*y5 - 3*t*y2*y5 - 2*t*y3*y5 + 3*y4*y5 - 3*y5^2;
+Q4 := t*y1*y4 + y4^2 - t*y1*y5 + t*y2*y5 - y4*y5 + y5^2;
+Q5 := t*y3*y4 - y4^2 + t*y0*y5 - t*y3*y5 + y4*y5 - y5^2;
+St := Scheme(A,[C,Q1,Q2,Q3,Q4,Q5]);
+Su := St meet Scheme(A,t-u);
+Irr := IrreducibleComponents(Su);
+ll := [];
+for Z in Irr do
+if Dimension(Z) eq 3 then ll := Append(ll,Z);
+end if;
+end for;
+W := ll[1];
+for i in [1..#ll] do
+W := W join ll[i];
+end for;
+P5<x0,x1,x2,x3,x4,x5> := ProjectiveSpace(FF,5);
+rad := map<A->P5 | [y0,y1,y2,y3,y4,y5]>;
+Su := rad(W);
+return Su;
+end function;
+
+// Example
+u := Random(Rationals(),100);
+Su := St(u);
+[Dimension(Su),Degree(Su)];
+[IsIrreducible(Su),IsSingular(Su)];
+IsDelPezzo(Su);
+
+// Example
+u := 0;
+Su := St(u);
+[Dimension(Su),Degree(Su)];
+[IsIrreducible(Su),IsSingular(Su)];
+IrrSu := IrreducibleComponents(Su);
+[Dimension(Z) : Z in IrrSu];
+[Degree(Z) : Z in IrrSu];
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// The following script produces a birational map ht: P^4 ---> P^5 over k(t) whose image is the cubic 4-fold Xt := (x0^3 + x1^3 + x2^3 + x3^3 + t*x1*x4^2 + x4^3 + t*x2*x4*x5 - t*x1*x5^2 + t*x2*x5^2 + x5^3 = 0) and which specialized to a birational parametrization of the Fermat cubic 4-fold as t ---> 0. 
+// The computation of the inverse of qoppa is computationally difficult so it has been saved in the file "Spec_Proj_K3.ws" and can be restored with the command: restore "Spec_Proj_K3.ws";
+// K3t is saved in "K3t.ws"
+
+FF<t> := FunctionField(Rationals());
+P5<x0,x1,x2,x3,x4,x5> := ProjectiveSpace(FF,5);
+f0 := -1/3*t*x0^2 + 2/3*t*x0*x1 + 1/3*t*x0*x2 - 1/3*t*x0*x3 - 1/3*t*x1*x2 - 1/3*t*x2^2 - 1/3*t*x2*x3 + x0*x4 - x1*x5;
+f1 := -1/3*t*x0^2 + 1/3*t*x0*x2 + 1/3*t*x1^2 - 1/3*t*x1*x3 - 1/3*t*x2^2 + 1/3*t*x3^2 + x0*x5 + x1*x4 - x1*x5;
+f2 := 1/3*t*x0^2 + 1/3*t*x0*x1 - 1/3*t*x0*x2 + 1/3*t*x0*x3 + 1/3*t*x1*x2 + 1/3*t*x2^2 - 2/3*t*x2*x3 + x2*x4 - x3*x5;
+f3 := x2*x5 + x3*x4 - x3*x5 + 1/3*t*x0^2 - 1/3*t*x0*x2 - 1/3*t*x1^2 + 1/3*t*x1*x3 + 1/3*t*x2^2 - 1/3*t*x3^2;
+f4 := t*x1*x4 - t*x1*x5 + t*x2*x5 + x4^2 - x4*x5 + x5^2;
+
+Xt := Scheme(P5,x0^3 + x1^3 + x2^3 + x3^3 + t*x1*x4^2 + x4^3 + t*x2*x4*x5 - t*x1*x5^2 + t*x2*x5^2 + x5^3);
+
+St := Scheme(P5,[f0,f1,f2,f3,f4]);
+
+IsSubscheme(St,Xt);
+
+P4<u0,u1,u2,u3,u4> := ProjectiveSpace(FF,4);
+
+qoppa := map<Xt->P4 | [f0,f1,f2,f3,f4]>;
+
+IsInvertible(qoppa);
+f := Inverse(qoppa);
+
+Df := DefiningEquations(f);
+Df := ClearDenominators(Df);
+h := map<P4->P5 | Df>;
+Yt := Image(h);
+Bh := BaseScheme(h);
+[Dimension(Bh),Degree(Bh)];
+
+p1 := u0^2 - u0*u1 + u1^2;
+p2 := u0*u2 - u0*u3 + u1*u3;
+p3 := u1*u2 - u0*u3;
+p4 := u2^2 - u2*u3 + u3^2;
+p5 := u4;
+
+W := Scheme(P4,[p1,p2,p3,p4,p5]);
+
+IsSubscheme(W,Bh);
+
+J := IrrelevantIdeal(P4);
+
+B2 := [f : f in Basis(Ideal(W) meet J^2) | Degree(f) eq 2];
+P8<z0,z1,z2,z3,z4,z5,z6,z7,z8> := ProjectiveSpace(FF,8);
+
+invproj := map<P4->P8 | B2>;
+K3t := invproj(Bh);
+
+Ht := Scheme(P8,[z4,z5,z6,z7,z8]);
+
+Dinvproj := DefiningEquations(invproj);
+invproj := map<Bh->K3t | Dinvproj>;
+IsInvertible(invproj);
+proj := Inverse(invproj);
+CP := BaseScheme(proj);
+
+equ0 := [];
+equ := DefiningEquations(K3t);
+for g in equ do
+ cf,mon := CoefficientsAndMonomials(g);
+ den := Lcm([Denominator(c) : c in cf]);
+ equ0 := Append(equ0,&+[Evaluate(cf[i]*den,0)*mon[i] : i in [1..#cf]]);
+end for;
+
+F0 := Scheme(P8,equ0);
+IRR := IrreducibleComponents(F0);
+K30 := Surface(P8,Ideal(IRR[1]));
+E0 := Surface(P8,Ideal(IRR[2]));
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// The following script produces the specialization h0 of the birational map ht: P^4 ---> P^5 over in the previous script. The base scheme of ht specializes to the base scheme of h0 and the reduced subscheme of the base locus of h0 is a singular complete intersection of two cubics.
+// The script computes also the K3 surface in P^8 of which the base scheme of h0 is a linear projection from a 5-secant 3-plane. The computation for the smoothness of the K3 surface has been saved in the file "K0_Smoothness.ws" and can be restored with the command: restore "K0_Smoothness.ws";  
+
+t := 0;
+
+FF := Rationals();
+P4<u0,u1,u2,u3,u4> := ProjectiveSpace(FF,4);
+P5<x0,x1,x2,x3,x4,x5> := ProjectiveSpace(FF,5);
+
+h0 := -u0^4 + 2*u0^3*u1 - 3*u0^2*u1^2 + 2*u0*u1^3 - u1^4 - u0*u2^3 - u1*u2^3 + 3*u0*u2^2*u3 - 3*u0*u2*u3^2 + 2*u0*u3^3 - u1*u3^3 + 1/3*t^2*u0^2*u1*u4 - 1/3*t^2*u1^3*u4 - t^2*u0*u1*u2*u4 + 1/3*t^2*u1^2*u2*u4 - 1/3*t^2*u1*u2^2*u4 + 1/3*t^2*u0^2*u3*u4 + 4/3*t^2*u0*u1*u3*u4 -
+        2/3*t^2*u1^2*u3*u4 - t^2*u0*u2*u3*u4 - 1/3*t^2*u2^2*u3*u4 + 4/3*t^2*u0*u3^2*u4 - 1/3*t^2*u1*u3^2*u4 - 1/3*t^2*u2*u3^2*u4 - t*u0^2*u4^2 - t*u0*u1*u4^2 + t*u1^2*u4^2 + t*u0*u2*u4^2 + t*u2^2*u4^2 - 3*t*u0*u3*u4^2 + t*u1*u3*u4^2 + 2*u0*u4^3 - u1*u4^3;
+h1 :=  u0^4 - 2*u0^3*u1 + 3*u0^2*u1^2 - 2*u0*u1^3 + u1^4 + u0*u2^3 - 2*u1*u2^3 + 3*u1*u2^2*u3 - 3*u1*u2*u3^2 + u0*u3^3 + u1*u3^3 + 1/3*t^2*u0^2*u1*u4 + 1/3*t^2*u0*u1^2*u4 - 1/3*t^2*u1^2*u2*u4 - 1/3*t^2*u1*u2^2*u4 + 1/3*t^2*u0^2*u3*u4 + t^2*u0*u1*u3*u4 + 1/3*t^2*u1^2*u3*u4 -
+        1/3*t^2*u1*u2*u3*u4 - 1/3*t^2*u2^2*u3*u4 + 2/3*t^2*u0*u3^2*u4 + 2/3*t^2*u1*u3^2*u4 + 1/3*t^2*u3^3*u4 - 2*t*u0*u1*u4^2 + t*u1*u2*u4^2 + t*u2^2*u4^2 - t*u0*u3*u4^2 - 2*t*u1*u3*u4^2 - t*u2*u3*u4^2 + u0*u4^3 + u1*u4^3;
+h2 := -u0^3*u2 + 3*u0^2*u1*u2 - 3*u0*u1^2*u2 + 2*u1^3*u2 - u2^4 - u0^3*u3 - u1^3*u3 + 2*u2^3*u3 - 3*u2^2*u3^2 + 2*u2*u3^3 - u3^4 + 2/3*t^2*u0^2*u1*u4 - 1/3*t^2*u0*u1^2*u4 + 1/3*t^2*u1^2*u2*u4 - 2/3*t^2*u1*u2^2*u4 + 2/3*t^2*u0^2*u3*u4 - 1/3*t^2*u1^2*u3*u4 + 4/3*t^2*u1*u2*u3*u4
+        - 2/3*t^2*u2^2*u3*u4 + 1/3*t^2*u0*u3^2*u4 - 2/3*t^2*u1*u3^2*u4 + t^2*u2*u3^2*u4 - 1/3*t^2*u3^3*u4 - t*u0^2*u4^2 - t*u0*u2*u4^2 - t*u1*u2*u4^2 + t*u2^2*u4^2 + t*u1*u3*u4^2 - 3*t*u2*u3*u4^2 + t*u3^2*u4^2 + 2*u2*u4^3 - u3*u4^3;
+h3 :=  u0^3*u2 + u1^3*u2 + u2^4 - 2*u0^3*u3 + 3*u0^2*u1*u3 - 3*u0*u1^2*u3 + u1^3*u3 - 2*u2^3*u3 + 3*u2^2*u3^2 - 2*u2*u3^3 + u3^4 + 2/3*t^2*u0^2*u1*u4 - t^2*u0*u1^2*u4 + 1/3*t^2*u1^3*u4 + 2/3*t^2*u1^2*u2*u4 + 1/3*t^2*u1*u2^2*u4 + 2/3*t^2*u0^2*u3*u4 - 1/3*t^2*u0*u1*u3*u4 -
+        1/3*t^2*u1^2*u3*u4 + 1/3*t^2*u2^2*u3*u4 + 2/3*t^2*u0*u3^2*u4 + 1/3*t^2*u1*u3^2*u4 - 2/3*t^2*u2*u3^2*u4 + t^2*u3^3*u4 - t*u0^2*u4^2 + t*u0*u1*u4^2 - t*u1*u2*u4^2 - t*u0*u3*u4^2 - 2*t*u3^2*u4^2 + u2*u4^3 + u3*u4^3;
+h4 :=  t*u0^3*u1 - 2*t*u0^2*u1^2 + 2*t*u0*u1^3 - t*u1^4 - t*u1^2*u2^2 + t*u1*u2^3 + t*u0^3*u3 - t*u0^2*u1*u3 + t*u0*u1^2*u3 + t*u1^2*u2*u3 - 2*t*u1*u2^2*u3 + t*u2^3*u3 + t*u0^2*u3^2 - t*u0*u1*u3^2 + 2*t*u1*u2*u3^2 - t*u2^2*u3^2 - t*u1*u3^3 + t*u2*u3^3 - 2*u0^3*u4 +
+        3*u0^2*u1*u4 + (-1/3*t^3 - 3)*u0*u1^2*u4 + u1^3*u4 + 1/3*t^3*u1^2*u2*u4 - 2*u2^3*u4 - 2/3*t^3*u0*u1*u3*u4 - 1/3*t^3*u1^2*u3*u4 + 2/3*t^3*u1*u2*u3*u4 + 3*u2^2*u3*u4 - 1/3*t^3*u0*u3^2*u4 - 2/3*t^3*u1*u3^2*u4 + (1/3*t^3 - 3)*u2*u3^2*u4 + (-1/3*t^3 + 1)*u3^3*u4 +
+        t^2*u0*u1*u4^2 + 1/3*t^2*u1^2*u4^2 - t^2*u1*u2*u4^2 + t^2*u0*u3*u4^2 + 5/3*t^2*u1*u3*u4^2 - t^2*u2*u3*u4^2 + 4/3*t^2*u3^2*u4^2 - t*u0*u4^3 - t*u1*u4^3 + t*u2*u4^3 - 2*t*u3*u4^3 + u4^4;
+h5 :=  t*u0^3*u1 - t*u0^2*u1^2 + t*u0*u1^3 - t*u0^2*u1*u2 + t*u0*u1^2*u2 - t*u1^3*u2 + t*u0*u1*u2^2 - t*u1^2*u2^2 + t*u0^3*u3 + t*u1^3*u3 - t*u0^2*u2*u3 + t*u0*u2^2*u3 + t*u0^2*u3^2 - t*u0*u2*u3^2 + t*u2^2*u3^2 + t*u0*u3^3 - t*u2*u3^3 + t*u3^4 - u0^3*u4 + 1/3*t^3*u0*u1^2*u4 -
+        u1^3*u4 - 1/3*t^3*u1^2*u2*u4 - u2^3*u4 + 2/3*t^3*u0*u1*u3*u4 + 1/3*t^3*u1^2*u3*u4 - 2/3*t^3*u1*u2*u3*u4 + 1/3*t^3*u0*u3^2*u4 + 2/3*t^3*u1*u3^2*u4 - 1/3*t^3*u2*u3^2*u4 + (1/3*t^3 - 1)*u3^3*u4 - t^2*u0*u1*u4^2 - 1/3*t^2*u1^2*u4^2 + t^2*u1*u2*u4^2 - t^2*u0*u3*u4^2 -
+        5/3*t^2*u1*u3*u4^2 + t^2*u2*u3*u4^2 - 4/3*t^2*u3^2*u4^2 + t*u0*u4^3 + t*u1*u4^3 - t*u2*u4^3 + 2*t*u3*u4^3 - u4^4;
+
+h := map<P4->P5 | [h0,h1,h2,h3,h4,h5]>;
+
+Dh := DefiningEquations(h);
+
+Bh := BaseScheme(h);
+
+[Dimension(Bh),Degree(Bh)];
+
+RBh := ReducedSubscheme(Bh);
+BB := Basis(Ideal(Bh));
+SS := ReducedSubscheme(SingularSubscheme(RBh));
+
+X := h(P4);
+
+J := IrrelevantIdeal(P4);
+B2 := [f : f in Basis(Ideal(SS) meet J^2) | Degree(f) eq 2];
+P8<z0,z1,z2,z3,z4,z5,z6,z7,z8> := ProjectiveSpace(FF,8);
+invproj := map<P4->P8 | B2>;
+
+K3 := invproj(RBh);
+[Dimension(K3),Degree(K3)];
+
+Dinvproj := DefiningEquations(invproj);
+invproj := map<RBh->K3 | Dinvproj>;
+IsInvertible(invproj);
+proj := Inverse(invproj);
+CP := BaseScheme(proj);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// The following script produces the variety Segpm which geometrically is the union of two Segre 3-folds containing the del Pezzo surface St. 
+
+Fiber := function(f,Z)
+    equ := DefiningEquations(f);
+    bas := MinimalBasis(Z);
+    P := Domain(f);
+    X := Scheme(P,[Evaluate(g,equ) : g in bas]);
+    return Complement(X,Scheme(P,equ));
+end function;
+
+Q<c> := QuadraticField(-3);
+
+FF<t> := FunctionField(Q,1);
+
+P2<u0,u1,u2> := ProjectiveSpace(FF,2);
+
+f0 := -u0^3*u1 - u1^4 - 3*u0^3*u2 - 6*u1^2*u2^2 - 9*u2^4;
+f1 := -u0^4 - u0*u1^3 + 3*u0*u1^2*u2 - 3*u0*u1*u2^2 + 9*u0*u2^3;
+f2 :=  u0^3*u1 + u1^4 - 3*u0^3*u2 + 6*u1^2*u2^2 + 9*u2^4;
+f3 :=  u0^4 + u0*u1^3 + 3*u0*u1^2*u2 + 3*u0*u1*u2^2 + 9*u0*u2^3;
+f4 :=  t*u0^4 - t*u1^4 - 6*t*u1^2*u2^2 - 9*t*u2^4;
+f5 :=  t*u0^2*u1^2 - t*u1^4 + 3*t*u0^2*u2^2 - 6*t*u1^2*u2^2 - 9*t*u2^4;
+
+P5<z0,z1,z2,z3,z4,z5> := ProjectiveSpace(FF,5);
+
+f := map<P2->P5 | [f0,f1,f2,f3,f4,f5]>;
+
+S := Image(f);
+
+a := Random(Rationals(),10);
+b := Random(Rationals(),10);
+L1 := Scheme(P2,a*u0+b*u1-b*c*u2);
+
+A := Random(Rationals(),100);
+B := Random(Rationals(),100);
+L2 := Scheme(P2,A*u0+B*u1-B*c*u2);
+
+L1m := Scheme(P2,a*u0+b*u1+b*c*u2);
+L2m := Scheme(P2,A*u0+B*u1+B*c*u2);
+
+C1 := f(L1);
+C2 := f(L2);
+
+J := IrrelevantIdeal(P5);
+
+B2 := [f : f in Basis(Ideal(S) meet J) | Degree(f) eq 2];
+
+Bb1 := [f : f in Basis(Ideal(C1) meet J) | Degree(f) eq 1];
+Bb2 := [f : f in Basis(Ideal(C2) meet J) | Degree(f) eq 1];
+H1 := Scheme(P5,Bb1);
+H2 := Scheme(P5,Bb2);
+
+P4<u0,u1,u2,u3,u4> := ProjectiveSpace(FF,4);
+
+g := map<P5->P4 | B2>;
+
+p1 := g(H1);
+p2 := g(H2);
+
+JJ := IrrelevantIdeal(P4);
+BH := [f : f in Basis(Ideal(p1) meet Ideal(p2) meet JJ) | Degree(f) eq 1];
+Lp := Scheme(P4,BH);
+
+C1m := f(L1m);
+C2m := f(L2m);
+
+Bb1m := [f : f in Basis(Ideal(C1m) meet J) | Degree(f) eq 1];
+Bb2m := [f : f in Basis(Ideal(C2m) meet J) | Degree(f) eq 1];
+H1m := Scheme(P5,Bb1m);
+H2m := Scheme(P5,Bb2m);
+
+p1m := g(H1m);
+p2m := g(H2m);
+
+BHm := [f : f in Basis(Ideal(p1m) meet Ideal(p2m) meet JJ) | Degree(f) eq 1];
+Lm := Scheme(P4,BHm);
+L := Lp join Lm;
+Segpm := Fiber(g,L);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// The following script produces a birational map ht: P^4 ---> P^5 over k(t) whose image is the cubic 4-fold Xt := (x0^3 + x1^3 + x2^3 + x3^3 + t*x1*x4^2 + x4^3 + t^2*x0^2*x5 - t^2*x0*x2*x5 + t^2*x1*x2*x5 + t^2*x2^2*x5 + t^2*x0*x3*x5 - t^2*x2*x3*x5 - t*x0*x4*x5 + 3*t*x2*x4*x5 + t*x2*x5^2 - 2*t*x3*x5^2 + x5^3 = 0) and which specialized to a birational parametrization of the Fermat cubic 4-fold as t ---> 0. 
+
+FF<t> := FunctionField(Rationals());
+P5<x0,x1,x2,x3,x4,x5> := ProjectiveSpace(FF,5);
+f0 := -1/3*t*x0^2 + 2/3*t*x0*x1 + 1/3*t*x0*x2 - 1/3*t*x0*x3 - 1/3*t*x1*x2 - 1/3*t*x2^2 - 1/3*t*x2*x3 + x0*x4 - x1*x5;
+f1 := -1/3*t*x0^2 + 1/3*t*x0*x2 + 1/3*t*x1^2 - 1/3*t*x1*x3 - 1/3*t*x2^2 + 1/3*t*x3^2 + x0*x5 + x1*x4 - x1*x5;
+f2 := 1/3*t*x0^2 + 1/3*t*x0*x1 - 1/3*t*x0*x2 + 1/3*t*x0*x3 + 1/3*t*x1*x2 + 1/3*t*x2^2 - 2/3*t*x2*x3 + x2*x4 - x3*x5;
+f3 := x2*x5 + x3*x4 - x3*x5 + 1/3*t*x0^2 - 1/3*t*x0*x2 - 1/3*t*x1^2 + 1/3*t*x1*x3 + 1/3*t*x2^2 - 1/3*t*x3^2;
+f4 := t*x1*x4 - t*x1*x5 + t*x2*x5 + x4^2 - x4*x5 + x5^2;
+
+Xt := Scheme(P5,x0^3 + x1^3 + x2^3 + x3^3 + t*x1*x4^2 + x4^3 + t^2*x0^2*x5 - t^2*x0*x2*x5 + t^2*x1*x2*x5 + t^2*x2^2*x5 + t^2*x0*x3*x5 - t^2*x2*x3*x5 - t*x0*x4*x5 + 3*t*x2*x4*x5 + t*x2*x5^2 - 2*t*x3*x5^2 + x5^3);
+
+St := Scheme(P5,[f0,f1,f2,f3,f4]);
+
+IsSubscheme(St,Xt);
+
+P4<u0,u1,u2,u3,u4> := ProjectiveSpace(FF,4);
+
+qoppa := map<Xt->P4 | [f0,f1,f2,f3,f4]>;
+
+IsInvertible(qoppa);
+
+f := Inverse(qoppa);
+
+r1 := x1^3 + x1^2*x2 + 2*x0*x1*x3 - 2*x1^2*x3 - 2*x1*x2*x3 - x0*x3^2 + 2*x1*x3^2 - x3^3 - 2/t*x0*x1*x4 + 4/t*x1^2*x4 +
+    4/t*x1*x2*x4 + 4/t*x0*x3*x4 - 7/t*x1*x3*x4 - 2/t*x2*x3*x4 + 4/t*x3^2*x4 - 3/t^2*x0*x4^2 + 6/t^2*x1*x4^2 +
+    3/t^2*x2*x4^2 - 6/t^2*x3*x4^2 + 3/t^3*x4^3 + 1/t*x0*x1*x5 - 2/t*x1^2*x5 - 2/t*x1*x2*x5 - 2/t*x0*x3*x5 + 2/t*x1*x3*x5
+    + 1/t*x2*x3*x5 - 2/t*x3^2*x5 + 3/t^2*x0*x4*x5 - 6/t^2*x1*x4*x5 - 3/t^2*x2*x4*x5 + 6/t^2*x3*x4*x5 - 6/t^3*x4^2*x5 +
+    3/t^2*x1*x5^2 - 3/t^2*x3*x5^2 + 6/t^3*x4*x5^2 - 3/t^3*x5^3;
+r2 := x0^2 - x0*x1 + x1^2 - x0*x2 + 2*x1*x2 + x2^2 + 2*x0*x3 - x1*x3 - x2*x3 + x3^2 - 3/t*x0*x4 + 3/t*x1*x4 + 3/t*x2*x4 -
+    3/t*x3*x4 + 3/t^2*x4^2 - 3/t^2*x4*x5 + 3/t^2*x5^2;
+
+Segpm := Scheme(P5,[r1,r2]);
+
+q := map<P5->P4 | [f0,f1,f2,f3,f4]>;
+
+L := q(Segpm);
+
+JJ := IrrelevantIdeal(P4);
+
+BQ := [f : f in Basis(Ideal(L) meet JJ^2) | Degree(f) eq 2];
+
+Df := DefiningEquations(f);
+Df := ClearDenominators(Df);
+h := map<P4->P5 | Df>;
+Yt := Image(h);
+Bh := BaseScheme(h);
+[Dimension(Bh),Degree(Bh)];
+
+IsSubscheme(L,Bh);
+
+P8<z0,z1,z2,z3,z4,z5,z6,z7,z8> := ProjectiveSpace(FF,8);
+
+s := map<P4->P8 | BQ>;
+
+Kt := s(Bh);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// The following script performs the computations of the previous script for a given value of t in Q. 
+
+t := 1;
+FF := Rationals();
+P5<x0,x1,x2,x3,x4,x5> := ProjectiveSpace(FF,5);
+f0 := -1/3*t*x0^2 + 2/3*t*x0*x1 + 1/3*t*x0*x2 - 1/3*t*x0*x3 - 1/3*t*x1*x2 - 1/3*t*x2^2 - 1/3*t*x2*x3 + x0*x4 - x1*x5;
+f1 := -1/3*t*x0^2 + 1/3*t*x0*x2 + 1/3*t*x1^2 - 1/3*t*x1*x3 - 1/3*t*x2^2 + 1/3*t*x3^2 + x0*x5 + x1*x4 - x1*x5;
+f2 := 1/3*t*x0^2 + 1/3*t*x0*x1 - 1/3*t*x0*x2 + 1/3*t*x0*x3 + 1/3*t*x1*x2 + 1/3*t*x2^2 - 2/3*t*x2*x3 + x2*x4 - x3*x5;
+f3 := x2*x5 + x3*x4 - x3*x5 + 1/3*t*x0^2 - 1/3*t*x0*x2 - 1/3*t*x1^2 + 1/3*t*x1*x3 + 1/3*t*x2^2 - 1/3*t*x3^2;
+f4 := t*x1*x4 - t*x1*x5 + t*x2*x5 + x4^2 - x4*x5 + x5^2;
+
+Xt := Scheme(P5,x0^3 + x1^3 + x2^3 + x3^3 + t*x1*x4^2 + x4^3 + t^2*x0^2*x5 - t^2*x0*x2*x5 + t^2*x1*x2*x5 + t^2*x2^2*x5 + t^2*x0*x3*x5 - t^2*x2*x3*x5 - t*x0*x4*x5 + 3*t*x2*x4*x5 + t*x2*x5^2 - 2*t*x3*x5^2 + x5^3);
+
+St := Scheme(P5,[f0,f1,f2,f3,f4]);
+
+IsSubscheme(St,Xt);
+
+P4<u0,u1,u2,u3,u4> := ProjectiveSpace(FF,4);
+
+qoppa := map<Xt->P4 | [f0,f1,f2,f3,f4]>;
+
+IsInvertible(qoppa);
+
+f := Inverse(qoppa);
+
+r1 := x1^3 + x1^2*x2 + 2*x0*x1*x3 - 2*x1^2*x3 - 2*x1*x2*x3 - x0*x3^2 + 2*x1*x3^2 - x3^3 - 2/t*x0*x1*x4 + 4/t*x1^2*x4 +
+    4/t*x1*x2*x4 + 4/t*x0*x3*x4 - 7/t*x1*x3*x4 - 2/t*x2*x3*x4 + 4/t*x3^2*x4 - 3/t^2*x0*x4^2 + 6/t^2*x1*x4^2 +
+    3/t^2*x2*x4^2 - 6/t^2*x3*x4^2 + 3/t^3*x4^3 + 1/t*x0*x1*x5 - 2/t*x1^2*x5 - 2/t*x1*x2*x5 - 2/t*x0*x3*x5 + 2/t*x1*x3*x5
+    + 1/t*x2*x3*x5 - 2/t*x3^2*x5 + 3/t^2*x0*x4*x5 - 6/t^2*x1*x4*x5 - 3/t^2*x2*x4*x5 + 6/t^2*x3*x4*x5 - 6/t^3*x4^2*x5 +
+    3/t^2*x1*x5^2 - 3/t^2*x3*x5^2 + 6/t^3*x4*x5^2 - 3/t^3*x5^3;
+r2 := x0^2 - x0*x1 + x1^2 - x0*x2 + 2*x1*x2 + x2^2 + 2*x0*x3 - x1*x3 - x2*x3 + x3^2 - 3/t*x0*x4 + 3/t*x1*x4 + 3/t*x2*x4 -
+    3/t*x3*x4 + 3/t^2*x4^2 - 3/t^2*x4*x5 + 3/t^2*x5^2;
+
+Segpm := Scheme(P5,[r1,r2]);
+
+q := map<P5->P4 | [f0,f1,f2,f3,f4]>;
+
+L := q(Segpm);
+
+JJ := IrrelevantIdeal(P4);
+
+BQ := [f : f in Basis(Ideal(L) meet JJ^2) | Degree(f) eq 2];
+
+Df := DefiningEquations(f);
+Df := ClearDenominators(Df);
+h := map<P4->P5 | Df>;
+Yt := Image(h);
+Bh := BaseScheme(h);
+[Dimension(Bh),Degree(Bh)];
+
+IsSubscheme(L,Bh);
+
+P8<z0,z1,z2,z3,z4,z5,z6,z7,z8> := ProjectiveSpace(FF,8);
+
+s := map<P4->P8 | BQ>;
+
+Kt := s(Bh);
+
+
