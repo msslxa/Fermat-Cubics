@@ -1,9 +1,446 @@
-// FerParCh2;
-// INPUT: a natural numbers n, and a field FF of characteristic 2;
-// OUTPUT: a birational parametrization f: P^{2n} ---> P^{2n+1} of the Fermat cubic hypersurface of dimension 2n over the field FF and its inverse.
+/*=====================================================================
+  BirParBF ―  Birational parameterisation by “third‑intersection”
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
+  INPUT
+    Y :  A hypersurface  X ⊂ ℙ^{2n+1}_K  of odd degree  2d+1
+         with multiplicity  d  along the skew n‑planes  H₁, H₂.
+         (In practice  Y  is given by a single homogeneous equation
+         inside its ambient projective space.)
 
+    H :  The union  H₁ ∪ H₂  of the two skew n‑planes contained in  X
+         (supplied as one scheme;  Dimension(H)=n).
+
+  OUTPUT
+    φ :  A rational map                           ┌              ┐
+             φ :  𝔸^{2n}_K   −−→   X  ⊂ ℙ^{2n+1}_K ,   t ↦ (φ₀:⋯:φ_{2n+1})
+         given by homogeneous coordinate polynomials  φᵢ(t₁,…,t_{2n})
+         that are *primitive* (no common factor).  
+         The map is generically one‑to‑one, hence birational.
+
+  WHAT THE ROUTINE DOES
+  •  Works in the function field  K(u₁,…,u_dimY)  to avoid base points.
+  •  For each ruling plane  Hᵢ  it inverts the projection to  ℙⁿ  and
+     writes a generic point  pᵢ  in terms of  (u₁,…,u_{2n}).
+  •  Builds the 3 × (2n+2) matrix whose rows are the ambient coordinates
+     (z₁,…,z_{2n+2}) together with  p₁  and  p₂;  its 3×3 minors cut out
+     the “residual” line‑congruence  L.
+  •  Intersects  L  with  X  and discards the fixed components  H₁∪H₂,
+     leaving the moving point ‘crd’ —the *third* intersection.
+  •  Substitutes independent affine parameters  t₁,…,t_{2n}  for the
+     u‑variables, clears denominators, removes any common polynomial
+     factor, and finally constructs the affine map  φ.
+
+  The result is a concrete birational parametrisation of  X  obtained
+  from the classical  “join of two skew planes”  construction.
+=====================================================================*/
+function BirParBF(Y, H)
+n := Dimension(H);
+    K := BaseField(Y);
+ PY := AmbientSpace(Y);
+m := Dimension(PY);
+dimY := Dimension(Y);
+F<[u]> := FunctionField(K,dimY);
+PP<[z]> := ProjectiveSpace(F,m);
+RPP := CoordinateRing(PP);
+X := Scheme(PP, DefiningEquations(Y)[1]);  
+comps := IrreducibleComponents(H);
+H1 := comps[1];  H2 := comps[2];
+H1 := Scheme(PP,DefiningEquations(H1));
+H2 := Scheme(PP,DefiningEquations(H2));
+Pn1<[v]> := ProjectiveSpace(F, n);
+proj1 := map< H1 -> Pn1 | Basis(Ideal(H2)) >;
+proj2 := map< H2 -> Pn1 | Basis(Ideal(H1)) >;
+assert IsInvertible(proj1);
+assert IsInvertible(proj2);
+f1 := Inverse(proj1);  // Pn1 → H1 ⊂ A
+f2 := Inverse(proj2);  // Pn2 → H2 ⊂ A
+p1 := f1([1] cat [u[i] : i in [1..n]]);   
+p2 := f2([1] cat [u[i] : i in [n+1..2*n]]);   
+rowZ  := [ z[i] : i in [1..2*n+2] ];   //  z‑coordinates  (1st row)
+rowP1 := Eltseq(p1);                      //  coords of p1   (2nd row)
+rowP1 := [RPP!a : a in rowP1];
+rowP2 := Eltseq(p2);                      //  coords of p2   (3rd row)
+rowP2 := [RPP!a : a in rowP2];
+M := Matrix( RPP, [ rowZ, rowP1, rowP2 ] );
+IL := Minors(M,3);   
+L := Scheme(PP,IL);
+int := L meet X;
+pts := Points(int);
+for p in pts do
+if p in H1 join H2 eq false then crd := p;
+end if;
+end for;
+crd := Eltseq(crd);
+names := [ Sprintf("t%o", i) : i in [1..2*n] ];   //  ["t1","t2",…,"t2n"]
+R := PolynomialRing( K, 2*n );
+AssignNames(~R, names);
+FF := FieldOfFractions( R );
+AssignNames(~FF, names);                        
+subs := [ FF.i : i in [1..2*n] ] cat [ FF!0 : i in [2*n+1..dimY] ];            
+crd_t := [ Evaluate( FF!c, subs ) : c in crd ];  
+den   := &* [ Denominator(x) : x in crd_t ];          
+crd_p := [ Numerator(x*den)  : x in crd_t ];       
+g := crd_p[1];
+for i in [2 .. #crd_p] do                     
+g := GCD(g, crd_p[i]);
+end for;
+if TotalDegree(g) gt 0 then               
+crd_p := [ q div g : q in crd_p ];    
+end if ;
+Aff<[t]> := AffineSpace( K, 2*n );
+phi       := map< Aff -> PY | crd_p >; 
+return phi;            
+end function;
+
+/*=====================================================================
+  SquareFreeInteger  ―  Square‑free part of an integer
+  -------------------------------------------------------------------
+  INPUT
+      n : An (ordinary) integer.  May be positive or negative.
+
+  OUTPUT
+      s : The unique square‑free integer with the same sign as n such
+          that  n = s · k²  for some integer k ≥ 0.
+          In particular,
+              • |s| is the product of all prime divisors of n that
+                occur with odd multiplicity;
+              • s carries the sign of n.
+
+  DESCRIPTION
+      Implements the usual factorisation‑based algorithm:
+        1. Factor |n| into primes  p_i^{e_i}.
+        2. Multiply together exactly those primes with an odd exponent
+           to obtain  |s|.
+        3. Give  s  the sign of the original integer n.
+
+      The function is stand‑alone, relies only on standard Magma
+      intrinsics `Factorization` and `Abs`, and works for arbitrarily
+      large integers.
+=====================================================================*/
+function SquareFreeInteger(n)
+    Z := Integers();
+    n := Z!n;                      // make sure we really have an int
+    s := Z!1;                      // will accumulate the square‑free part
+    for fac in Factorization(Abs(n)) do
+        p  := fac[1];
+        e  := fac[2];
+        if e mod 2 eq 1 then       // keep the prime if the exponent is odd
+            s *:= p;
+        end if;
+    end for;
+    if n lt 0 then                 // restore the sign, if necessary
+        s := -s;
+    end if;
+    return s;
+end function;
+
+/*=====================================================================
+  SplitFieldRank2Quadric  ―  Splitting field of a rank‑2 quadric
+  -------------------------------------------------------------------
+  INPUT
+    S : Either
+        • a homogeneous quadratic polynomial  f ∈ K[x₁,…,x_m],  or
+        • a projective scheme  Q ⊂ ℙ^{m−1}_K  whose FIRST defining
+          equation is such a polynomial.
+        The quadratic form must have rank exactly 2 and the ground
+        field  K  must have odd characteristic (char K ≠ 2).
+
+  OUTPUT
+    Kq : A quadratic field  K(√d)  that splits the quadric.  
+         If the discriminant  d  is already a square in  K,
+         the function returns  K  itself.
+    d  : A representative of the discriminant class of the rank‑2
+         quadratic form, chosen so that  Kq ≅ K[x]/(x² − d).
+
+  DESCRIPTION
+    * Reconstructs the symmetric Gram matrix  A  of the quadratic
+      form term‑by‑term.
+    * Locates a non‑singular 2 × 2 minor  B  inside  A  and sets  
+        d := −det B.    (The sign makes the forthcoming diagonal
+      form  ⟨λ, −μ⟩  split over  K(√d).)
+    * If  d  is a square in  K, the quadric is already the union of
+      two skew linear spaces over K; otherwise the field is extended
+      by adjoining  √d.  No version‑specific Magma intrinsics such as
+      `SymmetricMatrix`, `HessianMatrix`, or `SquarefreePart` are
+      used, making the routine compatible with all Magma releases.
+=====================================================================*/
+function SplitFieldRank2Quadric(S)
+    // --- pull out the quadratic polynomial ----------------------------
+    f := Type(S) eq Sch select DefiningEquations(S)[1] else S;
+
+    R     := Parent(f);
+    K     := BaseRing(R);
+    n     := Rank(R);                       // #variables x_1,…,x_n
+
+    // --- build the Gram matrix A term‑by‑term -------------------------
+    A := ZeroMatrix(K, n, n);
+    mons := Monomials(f);                   // monomials of f
+    coeffs := Coefficients(f);              // matching coefficients
+
+    for k in [1..#mons] do
+        mon := mons[k];
+        c   := coeffs[k];                   // coefficient of this mon
+        // exponents of each variable in the monomial
+        e := [ Degree(mon, i) : i in [1..n] ];
+        idx := [ i : i in [1..n] | e[i] ne 0 ];
+
+        if #idx eq 1 and e[idx[1]] eq 2 then                 // x_i^2
+            i := idx[1];
+            A[i][i] +:= c;
+        elif #idx eq 2 and &and[ e[i] eq 1 : i in idx ] then // x_i x_j
+            i, j := Explode(idx);
+            A[i][j] +:= c/2;
+            A[j][i] +:= c/2;
+        end if;
+    end for;
+
+    // --- pick any non‑zero 2×2 minor and take −det --------------------
+    d := K!0;
+    for i in [1..n-1] do
+        for j in [i+1..n] do
+            det := A[i][i]*A[j][j] - A[i][j]^2;
+            if det ne 0 then
+                d := -det;
+                break i;
+            end if;
+        end for;
+    end for;
+    if d eq 0 then
+        error "The given quadratic form is not of rank 2.";
+    end if;
+
+    // --- construct the quadratic splitting field ----------------------
+    if IsSquare(d) then
+        Kq := K;                            // already splits over K
+    else
+        Kq<sqrt_d> := ext< K | Polynomial([-d,0,1]) >;
+    end if;
+den := Denominator(d);
+d   := d * den^2;                 // clear denominators:  -3/4  →  -3
+d := SquareFreeInteger(Integers()!d); 
+Kq<sqrt_d> := QuadraticField(d);
+return Kq;
+end function;
+
+/*=====================================================================
+  BirParQE  ―  Birational parameterisation “after Quadratic Extension”
+  -------------------------------------------------------------------
+  PURPOSE
+      Given a hypersurface  X ⊂ ℙ^{2n+1}_F  of odd degree 2d+1 that is
+      d‑uple along an n‑dimensional *rank‑2 quadric*  Q = H (the union
+      of two skew n‑planes that split only after a quadratic extension),
+      this routine
+         1.  finds the minimal quadratic splitting field  K  of  Q,
+         2.  base‑changes  X  and  Q  to that field, and
+         3.  returns the birational parameterisation of  X_K  produced
+             by the “third‑intersection’’ machinery  `BirParBF`.
+
+  INPUT
+      Y :  The hypersurface  X  (one homogeneous equation) over the
+           *ground field* F.
+      H :  The rank‑2 quadric  Q ⊂ X  over F (supplied as one scheme).
+
+  OUTPUT
+      φ :  A rational map                         ┌                    ┐
+               φ :  𝔸_K^{2n}  −−→  X_K ⊂ ℙ^{2n+1}_K ,   t ↦ (φ₀:···:φ_{2n+1})
+           where  K = F(√d)  is the quadratic field that splits  Q.
+           The map is generically one‑to‑one, thus birational.
+
+  METHOD
+      ▸  `SplitFieldRank2Quadric`  detects the discriminant  d  of  Q
+         and returns the quadratic extension  K = F(√d).
+      ▸  The hypersurface  Y  and the quadric  H  are base‑changed
+         from  F  to  K  by rewriting their defining equations in the
+         coordinate ring of  ℙ^{2n+1}_K.
+      ▸  `BirParBF`  (documented separately) is then invoked over  K
+         to obtain the desired parametrisation.
+=====================================================================*/
+function BirParQE(Y,H)
+n := Dimension(H);
+FF := BaseField(Y);
+AY := AmbientSpace(Y);
+m := Dimension(AY);
+K := SplitFieldRank2Quadric(H);
+PY<[z]> := ProjectiveSpace(K,m);
+Y := Scheme(PY,DefiningEquations(Y)[1]);
+H := Scheme(PY,DefiningEquations(H)) meet Y;
+phi := BirParBF(Y,H);
+return phi;
+end function;
+
+/*=====================================================================
+  BirPar  ―  One‑step birational parametrisation of X via skew planes
+  -------------------------------------------------------------------
+  INPUT
+    Y : A hypersurface  X ⊂ ℙ^{2n+1}_K  of odd degree 2d+1 whose
+        multiplicity along the rank‑2 quadric  H  equals  d.
+
+    H : The quadric  H ⊂ X.  Over the ground field  K  it may already
+        split as the union of two skew n‑planes, or it may remain
+        geometrically irreducible and split only after a quadratic
+        extension.
+
+  OUTPUT
+    φ : A birational map                             ┌              ┐
+          φ : 𝔸^{2n}_{K’}  −−→  X_{K’}  ⊂ ℙ^{2n+1}_{K’} ,
+        where
+          • K’ =  K          if  H  already has two components, or
+          • K’ =  K(√d)      if  H  needs the quadratic splitting
+                              field produced by  SplitFieldRank2Quadric.
+
+  DESCRIPTION
+    * Checks whether  H  is the disjoint union of two components
+      over the given base field  K.
+    * If **yes** (rank‑2 quadric already split) it calls  BirParBF
+      directly to obtain a parametrisation over  K.
+    * If **no**  it first calls  BirParQE, which enlarges the base
+      field to the quadratic extension that splits  H  and then
+      invokes  BirParBF  internally.
+    * Returns the resulting birational parameterisation  φ.
+=====================================================================*/
+function BirPar(Y,H)
+n := Dimension(H);
+if # IrreducibleComponents(H) eq 2 then phi := BirParBF(Y,H);
+else phi := BirParQE(Y,H);
+end if;
+return phi;
+end function;
+
+/*=====================================================================
+  Example 1  ―  Cubic surface with two fixed skew lines
+  -------------------------------------------------------------------
+  INPUT
+      FF = ℚ                (field of definition)
+      P³_ℚ  coords (x:y:z:w)
+      Four random linear forms  R₁,…,R₄
+
+  CONSTRUCTS
+      Y  : cubic surface  x z R₁ + x w R₂ + y z R₃ + y w R₄ = 0
+           (mult 1 along the skew lines  {x=z=0}, {y=w=0})
+      H  : those two lines, scheme‑theoretically
+      f  : birational map  ℙ²_ℚ  ⇢  Y  via  BirPar
+
+  ROUTINE
+      BirPar(Y,H)           (H already split over ℚ)
+
+  OUTPUT
+      f  : birational parametrisation defined over ℚ
+=====================================================================*/
+FF := RationalField();
+P3<x,y,z,w> := ProjectiveSpace(FF,3);
+R1 := Random(FF,10)*x + Random(FF,10)*y + Random(FF,10)*z + Random(FF,10)*w;
+R2 := Random(FF,10)*x + Random(FF,10)*y + Random(FF,10)*z + Random(FF,10)*w;
+R3 := Random(FF,10)*x + Random(FF,10)*y + Random(FF,10)*z + Random(FF,10)*w;
+R4 := Random(FF,10)*x + Random(FF,10)*y + Random(FF,10)*z + Random(FF,10)*w;
+Y := Scheme(P3,  x*z*R1 + x*w*R2 + y*z*R3 + y*w*R4);
+H := Scheme(P3, [x*z, x*w, y*z, y*w]) meet Y;
+f := BirPar(Y, H);     //  f : ℙ²_ℚ  ⇢  Y
+
+/*=====================================================================
+  Example 2  ―  Fermat cubic surface and a rank‑2 quadric
+  -------------------------------------------------------------------
+  INPUT
+      FF = ℚ
+      P³_ℚ  coords (x:y:z:w)
+
+  CONSTRUCTS
+      Y  : Fermat cubic  x³ + y³ + z³ + w³ = 0
+      Q  : rank‑2 quadric (four equations) – irreducible over ℚ
+      g  : birational map  ℙ²_{ℚ(√−3)}  ⇢  Y_{ℚ(√−3)}
+
+  ROUTINE
+      BirParQE(Y,Q)        (computes K = ℚ(√−3) that splits Q)
+
+  OUTPUT
+      g  : parametrisation defined over the quadratic extension
+=====================================================================*/
+FF := RationalField();
+P3<x,y,z,w> := ProjectiveSpace(FF,3);
+Y := Scheme(P3,  x^3 + y^3 + z^3 + w^3);
+Q := Scheme(P3, [ x^2 - x*y + y^2, x*z - x*w + y*w,y*z - x*w,z^2 - z*w + w^2 ]);
+g := BirParQE(Y, Q);    //  g : ℙ²_{ℚ(√−3)}  ⇢  Y_{ℚ(√−3)}
+
+/*=====================================================================
+  Example 3  ―  Quintic 4-fold with multiplicity 2 along a rank‑2 quadric
+  -------------------------------------------------------------------
+  INPUT
+      FF = ℚ
+      n  = 2      →  ambient P⁵,  4-fold degree d = 5
+      m  = 2      (power of the quadric ideal)
+
+  CONSTRUCTS
+      Q  : rank‑2 quadric in ℙ⁵_ℚ  (here first irreducible component of  V( x_{2i+1}² − x_{2i+1}x_{2i+2} + x_{2i+2}² ))
+      Y  : random quintic 4-fold with multiplicity 2 along Q
+      h  : birational map  ℙ⁴_{ℚ(√−3)}  ⇢  Y_{ℚ(√−3)}
+
+  ROUTINE
+      BirPar(Y,Q)          (detects Q unsplit, adjoins √−3 automatically)
+
+  OUTPUT
+      h  : explicit parametrisation over ℚ(√−3)
+=====================================================================*/
+FF := RationalField();
+n  := 2;
+N  := 2*n + 1;                         // ambient dimension 5
+PN<[z]> := ProjectiveSpace(FF, N);
+m  := 2;                               // multiplicity along Q
+d  := 2*m + 1;                         // degree 5
+/* --- rank‑2 quadric -------------------------------------------------- */
+ll := [];
+for i in [0 .. n] do
+    Append(~ll,  z[2*i+1]^2 - z[2*i+1]*z[2*i+2] + z[2*i+2]^2 );
+end for;
+Z      := Scheme(PN, ll);
+Q      := IrreducibleComponents(Z)[1];
+/* --- random quintic with mult 2 along Q ----------------------------- */
+J  := IrrelevantIdeal(PN);
+B  := [ f : f in Basis(Ideal(Q)^m meet J^d) | Degree(f) eq d ];
+Y  := Scheme(PN, &+[ Random(FF,3)*b : b in B ]);
+/* --- birational map -------------------------------------------------- */
+h := BirPar(Y, Q);     //  h : ℙ⁴_{ℚ(√−3)}  ⇢  Y_{ℚ(√−3)}
+
+/*=====================================================================
+  FerParCh2  ―  Birational parametrisation of the even‑dimensional
+                Fermat cubic in characteristic 2
+  -------------------------------------------------------------------
+  INPUT
+      n  : A positive integer.  
+           The routine works in projective dimension 2 n, hence builds
+           the Fermat cubic   Σ x_i³  = 0   in  ℙ^{2n+1}.
+
+      FF : A field of characteristic 2 (finite, function, local …).
+
+  OUTPUT
+      f  : A rational map
+              f : ℙ^{2n}_FF  –––➝  X ⊂ ℙ^{2n+1}_FF ,
+           where  X  is the 2 n‑dimensional Fermat cubic hypersurface
+           Σ x_i³ = 0.  The map is generically one‑to‑one, hence
+           birational.
+
+      h  : A rational inverse
+              h : X  –––➝  ℙ^{2n}_FF .
+           Composing  h ∘ f  (resp. f ∘ h)  is the identity on the
+           domain of definition inside  ℙ^{2n}  (resp. X).
+
+  DESCRIPTION
+      * Works entirely over the input field FF with char 2.
+      * Constructs two auxiliary cubic forms
+            Pp = Σ u_i³ ,   Q = Σ (u_{2i+1}² u_{2i+2} +
+                                   u_{2i+1} u_{2i+2}² +
+                                   u_{2i+2}³)
+        in the homogeneous coordinates  u₁,…,u_{2n+1}  of ℙ^{2n}.
+      * Builds the  (2n+2) homogeneous coordinates  g₀,…,g_{2n+1}
+        of the forward map  f  by alternating combinations of  Pp
+        and  Q,  tailored so that their common image is the Fermat
+        cubic.
+      * Re‑embeds that image as a subscheme  X  of ℙ^{2n+1} and
+        rewrites  f  with those defining equations.
+      * Constructs explicit cubic polynomials in the target ring of
+        X  that give the inverse map  h,  again using only additions
+        and multiplications (appropriate in char 2).
+      * Returns the pair  (f, h).  No further checks are necessary;
+        the construction guarantees  h  is the inverse of  f.
+=====================================================================*/
 FerParCh2 := function(n,FF)
 Pt<[u]> := ProjectiveSpace(FF,2*n);
 R := CoordinateRing(Pt);
@@ -65,12 +502,41 @@ f,h := FerParCh2(n,FF);
 r := f*h;
 r := Normalization(map<Domain(r)->Codomain(r) | DefiningEquations(r)>);
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*=====================================================================
+  BLFerParCh2  ―  Base locus of the characteristic-2 Fermat map
 
-// BLFerParCh2;
-// INPUT: a natural numbers n, and a field FF of characteristic 2;
-// OUTPUT: the base locus of the birational parametrization f: P^{2n} ---> P^{2n+1} of the Fermat cubic hypersurface of dimension 2n over the field FF given by FerParCh2.
+  -------------------------------------------------------------------
+  INPUT
+      n  : A positive integer.  The routine works in projective
+           dimension 2 n, i.e. inside  ℙ^{2n}.
 
+      FF : A field of characteristic 2 (finite, function, local …).
+
+  OUTPUT
+      BL : The base-locus scheme
+              BL ⊂ ℙ^{2n}_FF
+           of the birational map  f : ℙ^{2n} ⇢ ℙ^{2n+1}  produced by
+           `FerParCh2(n, FF)`.  Concretely
+                BL  =  V(Pp, Q)
+           where
+                Pp = Σ u_i³
+                Q  = Σ (u_{2i+1}² u_{2i+2}
+                       + u_{2i+1} u_{2i+2}²
+                       + u_{2i+2}³)
+           in the homogeneous coordinates  u₁,…,u_{2n+1}  of ℙ^{2n}.
+           Outside BL the map  f  is defined and generically invertible.
+
+  DESCRIPTION
+      The birational parametrisation  `FerParCh2`  of the even-dimensional
+      Fermat cubic in characteristic 2 is given by cubic forms
+      involving the two special cubics  Pp  and  Q.  Their common zero
+      locus inside the source projective space is precisely the base
+      locus of  f.  This helper routine returns that scheme so that
+      users can
+          • verify that  BL  has the expected codimension two,
+          • analyse its irreducible components,
+          • or simply visualise where  f  fails to be regular.
+=====================================================================*/
 BLFerParCh2 := function(n,FF)
 Pt<[u]> := ProjectiveSpace(FF,2*n);
 Pp := &+[u[i]^3 : i in [1..2*n+1]];
@@ -85,12 +551,35 @@ n := 3;
 BL := BLFerParCh2(n,FF);
 BL;
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*=====================================================================
+  BLinvFerParCh2  ―  Base locus of the inverse Fermat map (char 2)
 
-// BLinvFerParCh2;
-// INPUT: a natural numbers n, and a field FF of characteristic 2;
-// OUTPUT: the base locus of the map h: X^{2n} ---> P^{2n} given by FerParCh2.
+  -------------------------------------------------------------------
+  INPUT
+      n  : A positive integer.  The ambient space of the inverse map
+           is  ℙ^{2n};  the Fermat cubic surface lives in  ℙ^{2n+1}.
 
+      FF : A field of characteristic 2.
+
+  OUTPUT
+      BL : The base‑locus scheme
+              BL ⊂ X
+           of the inverse map
+              h :  X  ⇢  ℙ^{2n}_FF
+           returned by  `FerParCh2(n, FF)`.
+           Here  X  is the (2 n)-dimensional Fermat cubic
+           Σ x_i³ = 0  over FF.
+
+  DESCRIPTION
+      •  Calls  `FerParCh2(n, FF)`  to obtain the birational pair
+           f : ℙ^{2n} ⇢ X    and    h : X ⇢ ℙ^{2n}.
+      •  Uses Magma’s intrinsic  `BaseScheme(h)`  to compute the
+         scheme‑theoretic set of points of  X  where  h  is undefined
+         (i.e. where the homogeneous coordinates of  h  vanish
+         simultaneously).
+      •  Returns that base locus  BL.  It is useful, for instance,
+         to factor  X  via a blow‑up or to study singularities.
+=====================================================================*/
 BLinvFerParCh2 := function(n,FF)
 f,h := FerParCh2(n,FF);
 BL := BaseScheme(h);
@@ -105,12 +594,47 @@ IRR := IrreducibleComponents(BL);
 [Dimension(Z) : Z in IRR];
 [Degree(Z) : Z in IRR];
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*=====================================================================
+  FerPar  ―  Birational parametrisation of the even‑dimensional
+             Fermat cubic in characteristic ≠ 2, 3
+  -------------------------------------------------------------------
+  INPUT
+      n  : A positive integer.  The routine works in projective
+           dimension 2 n, i.e. the source is  ℙ^{2n}_FF  and the target
+           cubic hypersurface lives in  ℙ^{2n+1}_FF.
 
-// FerPar;
-// INPUT: a natural numbers n, and a field FF of characteristic different from 2 and 3;
-// OUTPUT: a birational parametrization f: P^{2n} ---> P^{2n+1} of the Fermat cubic hypersurface of dimension 2n over the field FF.
+      FF : A field whose characteristic is *neither* 2 nor 3
+           (so that divisions by 2 and 3 occurring in the formulas
+           make sense).
 
+  OUTPUT
+      f  : A rational map
+              f : ℙ^{2n}_FF  –––➝  X ⊂ ℙ^{2n+1}_FF
+           whose image  X  is the (2 n)-dimensional Fermat cubic
+           Σ x_i³ = 0.  The map is generically one‑to‑one, hence
+           birational.
+
+      h  : An explicit rational inverse
+              h : X  –––➝  ℙ^{2n}_FF .
+           Both composita  h ∘ f  and  f ∘ h  are the identity on the
+           respective domains of definition.
+
+  DESCRIPTION
+      •  Constructs two auxiliary cubic forms  A  and  B  in the
+         coordinates  u₁,…,u_{2n+1}  of the source projective space.
+      •  Uses them to build (2 n+2) cubic polynomials that provide the
+         homogeneous coordinates of the forward map  f.
+      •  Computes the image  X, re‑expresses  f  with the defining
+         equations of  X,  and then constructs a quadratic inverse map
+         h  via a classical projection‑from‑a‑scroll argument:
+           –  builds a “half‑scroll’’  Hpm  of quadrics inside the
+              target space,
+           –  intersects it with  X  and the line  x_{2n+1}=x_{2n+2}=0,
+           –  extracts a quadratic basis  B2  that yields  h.
+      •  Post‑composes  h  with a projective automorphism  aut  of the
+         source to simplify its formulae.
+      •  Returns the pair  (f, h).
+=====================================================================*/
 FerPar := function(n,FF)
 Ps<[u]> := ProjectiveSpace(FF,2*n);
 R := CoordinateRing(Ps);
@@ -175,13 +699,6 @@ h := map<Domain(h)->Codomain(h) | DefiningEquations(h)>;
 return f,h;
 end function;
 
-// Example
-FF := Rationals();
-n := 3;
-f,h := FerPar(n,FF);
-r := f*h;
-r := Normalization(map<Domain(r)->Codomain(r) | DefiningEquations(r)>);
-
 // Example (Birational parametrization of the Fermat cubic surface in P^3 over the rationals)
 n := 1;
 FF := Rationals();
@@ -193,6 +710,13 @@ n := 2;
 FF := Rationals();
 f := FerPar(n,FF);
 X := Image(f);
+
+// Example (Birational parametrization of the Fermat cubic 6-fold in P^7 over the rationals)
+FF := Rationals();
+n := 3;
+f,h := FerPar(n,FF);
+r := f*h;
+r := Normalization(map<Domain(r)->Codomain(r) | DefiningEquations(r)>);
 
 // Example (Birational parametrization of the Fermat cubic 6-fold in P^7 over F_13)
 n := 3;
@@ -206,12 +730,43 @@ FF := GF(5);
 f := FerPar(n,FF);
 X := Image(f);
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*=====================================================================
+  BLFerPar  ―  Base locus of the characteristic ≠ 2, 3 Fermat map
+  -------------------------------------------------------------------
+  INPUT
+      n  : A positive integer.  The ambient space of the parametrising
+           map  f  is  ℙ^{2n}_FF.
 
-// BLFerPar;
-// INPUT: a natural numbers n, and a field FF of characteristic different from 2 and 3;
-// OUTPUT: the base locus of the birational parametrization f: P^{2n} ---> P^{2n+1} of the Fermat cubic hypersurface of dimension 2n over the field FF given by FerPar.
+      FF : A field whose characteristic is neither 2 nor 3
+           (divisions by 2 and 3 occur in the formulas).
 
+  OUTPUT
+      BL : The base‑locus scheme
+              BL ⊂ ℙ^{2n}_FF
+           of the birational map  f : ℙ^{2n} ⇢ ℙ^{2n+1}  produced by
+           `FerPar(n, FF)`.  Concretely
+                BL = V(A, B)
+           where  A  and  B  are the two cubic forms
+
+                A = Σ ( u_{2j}³ + 3 u_{2j}² u_{2j+1}
+                         + 3 u_{2j} u_{2j+1}² + 9 u_{2j+1}³ ) + u₁³,
+                B = Σ ( u_{2j}³ − u_{2j}² u_{2j+1}
+                         + 3 u_{2j} u_{2j+1}² − 3 u_{2j+1}³ ) + u₁³,
+
+           summed over  j = 1,…,n  in the homogeneous coordinates
+           u₁,…,u_{2n+1}  of ℙ^{2n}.  Outside  BL  the map  f  is
+           regular and birational onto the (2 n)-dimensional Fermat
+           cubic hypersurface in  ℙ^{2n+1}_FF.
+
+  DESCRIPTION
+      The parametrisation returned by  `FerPar`  is expressed through
+      the two special cubic forms  A  and  B.  Their common zero locus
+      in the source projective space is precisely the set of points
+      where all numerators of the homogeneous coordinates of  f vanish
+      simultaneously—hence the base locus.  This helper routine
+      returns that scheme so that users can inspect its geometry or
+      verify that it has the expected codimension.
+=====================================================================*/
 BLFerPar := function(n,FF)
 Ps<[u]> := ProjectiveSpace(FF,2*n);
 R := CoordinateRing(Ps);
@@ -229,14 +784,37 @@ BL;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// BLinvFerPar;
-// INPUT: a natural numbers n, and a field FF of characteristic different from 2 and 3;
-// OUTPUT: the base locus of the map h: X^{2n} ---> P^{2n} given by FerPar.
+/*=====================================================================
+  BLinvFerPar  ―  Base locus of the inverse Fermat map (char ≠ 2, 3)
+  -------------------------------------------------------------------
+  INPUT
+      n  : Positive integer.  Determines the dimension:
+              source  ℙ^{2n}_FF   and   Fermat cubic  X ⊂ ℙ^{2n+1}_FF.
 
-BLinvFerPar := function(n,FF)
-f,h := FerPar(n,FF);
-BL := BaseScheme(h);
-return BL;
+      FF : A field whose characteristic is neither 2 nor 3
+           (the construction of  FerPar  involves division by 2 and 3).
+
+  OUTPUT
+      BL : Scheme‑theoretic base locus of
+              h :  X  ⇢  ℙ^{2n}_FF ,
+           where  h  is the inverse map returned by  `FerPar(n, FF)`.
+           Concretely,  BL = BaseScheme(h)  inside the Fermat cubic  X.
+           Outside  BL  the map  h  is regular and satisfies  h ∘ f = id.
+
+  DESCRIPTION
+      •  Calls  `FerPar(n, FF)`  to obtain the birational pair of maps
+            f : ℙ^{2n} ⇢ X    and    h : X ⇢ ℙ^{2n}.
+      •  Uses Magma’s intrinsic  `BaseScheme`  to compute the closed
+        subscheme of  X  where all homogeneous coordinate functions of
+        h vanish simultaneously.
+      •  Returns this base locus, enabling further geometric analysis
+        such as dimension, degree, or decomposition into irreducible
+        components.
+=====================================================================*/
+function BLinvFerPar(n, FF)
+    _, h := FerPar(n, FF);        // obtain the inverse map h
+    BL  := BaseScheme(h);         // its base locus on X
+    return BL;
 end function;
 
 // Example
@@ -247,21 +825,56 @@ IRR := IrreducibleComponents(BL);
 [Dimension(Z) : Z in IRR];
 [Degree(Z) : Z in IRR];
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*=====================================================================
+  SingBL  ―  Singular locus of the base locus for the Fermat map
+  -------------------------------------------------------------------
+  INPUT
+      n  : Positive integer.  Determines the source space  ℙ^{2n}_FF
+           of the parametrisation `FerPar` and, hence, the dimension
+           of its base locus.
 
-// SingBL;
-// INPUT: a natural numbers n, and a field FF of characteristic different from 2 and 3;
-// OUTPUT: a pair SBL, RSBL where SBL is the singular locus of the base locus of the birational parametrization f: P^{2n} ---> P^{2n+1} of the Fermat cubic hypersurface of dimension 2n over the field FF given by FerPar, and RSBL is the reduced subscheme of SBL.
+      FF : A field whose characteristic is neither 2 nor 3
+           (required by the cubic formulas that define the map).
 
-SingBL := function(n,FF)
-Ps<[u]> := ProjectiveSpace(FF,2*n);
-R := CoordinateRing(Ps);
-A := &+[u[2*j]^3+3*u[2*j]^2*u[2*j+1]+3*u[2*j]*u[2*j+1]^2+9*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
-B := &+[u[2*j]^3-u[2*j]^2*u[2*j+1]+3*u[2*j]*u[2*j+1]^2-3*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
-BL := Scheme(Ps,[A,B]);
-SBL := SingularSubscheme(BL);
-RSBL := ReducedSubscheme(SBL);
-return SBL,RSBL;
+  OUTPUT
+      SBL  : The scheme‑theoretic singular locus of the base locus
+             BL = V(A, B) ⊂ ℙ^{2n}_FF,  where
+                 A = Σ ( u_{2j}³ + 3 u_{2j}² u_{2j+1}
+                          + 3 u_{2j} u_{2j+1}² + 9 u_{2j+1}³ ) + u₁³
+                 B = Σ ( u_{2j}³ −   u_{2j}² u_{2j+1}
+                          + 3 u_{2j} u_{2j+1}² − 3 u_{2j+1}³ ) + u₁³
+             and the sums run over  j = 1,…,n  in the coordinates
+             u₁,…,u_{2n+1}  of ℙ^{2n}.
+
+      RSBL : The *reduced* subscheme underlying  SBL, obtained with
+             `ReducedSubscheme`.  Geometrically, RSBL is the variety
+             of singular points of BL, stripped of embedded and
+             non‑reduced structure.
+
+  DESCRIPTION
+      The birational map  f  produced by `FerPar(n, FF)` is undefined
+      precisely on the base locus  BL = V(A,B).  This routine
+        1. recreates BL from the same cubic forms  A  and  B,
+        2. uses Magma’s `SingularSubscheme` to compute its singular
+           locus  SBL,
+        3. applies `ReducedSubscheme` to obtain the underlying
+           reduced variety  RSBL,
+      and returns the pair  (SBL, RSBL)  for further geometric study.
+=====================================================================*/
+function SingBL(n, FF)
+    Ps<[u]> := ProjectiveSpace(FF, 2*n);
+
+    A := &+[u[2*j]^3 + 3*u[2*j]^2*u[2*j+1] + 3*u[2*j]*u[2*j+1]^2
+             + 9*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
+
+    B := &+[u[2*j]^3 - u[2*j]^2*u[2*j+1] + 3*u[2*j]*u[2*j+1]^2
+             - 3*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
+
+    BL   := Scheme(Ps, [A, B]);          // base locus of FerPar
+    SBL  := SingularSubscheme(BL);       // singular locus
+    RSBL := ReducedSubscheme(SBL);       // its reduced part
+
+    return SBL, RSBL;
 end function;
 
 // Example
@@ -271,43 +884,97 @@ SBL,RSBL := SingBL(n,FF);
 SBL;
 RSBL;
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*=====================================================================
+  PBL  ―  Projected base locus and higher‑multiplicity strata
+  -------------------------------------------------------------------
+  INPUT
+      n  : Positive integer.  Determines the source space ℙ^{2n}_FF and
+           hence the dimension of the base locus BL of the map
+           produced by `FerPar(n, FF)`.
 
-// PBL;
-// INPUT: a natural numbers n, and a field FF of characteristic different from 2 and 3;
-// OUTPUT: four schemes PBL, PRSBL, S2, S3 where PBL is the projection from [0:...:0:1] of the base locus of the birational parametrization f: P^{2n} ---> P^{2n+1} of the Fermat cubic hypersurface of dimension 2n over the field FF given by FerPar, PRSBL is the projection from [0:...:0:1] of the reduced singular locus of BL, S2 is the locus of points of multiplcity at least three of PBL, and S3 is the locus of points of multiplcity at least four of PBL.
+      FF : A field whose characteristic is neither 2 nor 3 (division by
+           2 and 3 appears in the cubic formulas that define the map).
 
-PBL := function(n,FF)
-Ps<[u]> := ProjectiveSpace(FF,2*n);
-R := CoordinateRing(Ps);
-A := &+[u[2*j]^3+3*u[2*j]^2*u[2*j+1]+3*u[2*j]*u[2*j+1]^2+9*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
-B := &+[u[2*j]^3-u[2*j]^2*u[2*j+1]+3*u[2*j]*u[2*j+1]^2-3*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
-BL := Scheme(Ps,[A,B]);
-SBL := SingularSubscheme(BL);
-RSBL := ReducedSubscheme(SBL);
-Pt<[v]> := ProjectiveSpace(FF,2*n-1);
-proj := map<Ps->Pt | [u[i] : i in [1..2*n]]>;
-PBL := proj(BL);
-PRSBL := proj(RSBL);
-F := DefiningEquations(PBL)[1];
-Der1 := [Derivative(F,i) : i in [1..2*n]];
-Der2 := [];
-for P in Der1 do
-for i in [1..2*n] do
-Der2 := Append(Der2,Derivative(P,i));
-end for;
-end for;
-Der2 := Setseq(Set(Der2));
-S2 := Scheme(Pt,Der2);
-Der3 := [];
-for P in Der2 do
-for i in [1..2*n] do
-Der3 := Append(Der3,Derivative(P,i));
-end for;
-end for;
-Der3 := Setseq(Set(Der3));
-S3 := Scheme(Pt,Der3);
-return PBL,PRSBL,S2,S3;
+  OUTPUT
+      PBL    : The image of the base locus
+                   BL = V(A, B) ⊂ ℙ^{2n}_FF
+               under the projection
+                   π_[0:…:0:1] : ℙ^{2n}  ––→  ℙ^{2n−1},
+               i.e. π(BL).  Here
+                   A = Σ (u_{2j}³ + 3u_{2j}²u_{2j+1}
+                            + 3u_{2j}u_{2j+1}² + 9u_{2j+1}³) + u₁³,
+                   B = Σ (u_{2j}³ −   u_{2j}²u_{2j+1}
+                            + 3u_{2j}u_{2j+1}² − 3u_{2j+1}³) + u₁³,
+               with j = 1,…,n in the coordinates u₁,…,u_{2n+1}.
+
+      PRSBL  : The projection π of the *reduced* singular locus of BL.
+               (SingularSubscheme → ReducedSubscheme → projection.)
+
+      S2     : Subscheme of ℙ^{2n−1}_FF where the defining cubic F of
+               PBL has multiplicity ≥ 3.  Computed as the common zero
+               locus of all second‑order partials of F.
+
+      S3     : Subscheme of points in ℙ^{2n−1}_FF where F has
+               multiplicity ≥ 4.  Obtained by vanishing of all third‑
+               order partial derivatives.
+
+  DESCRIPTION
+      1.  Re‑creates the base locus BL via the two cubics A and B that
+          appear in `FerPar`.
+      2.  Computes its singular locus (SBL) and takes the reduced
+          underlying variety (RSBL).
+      3.  Projects BL and RSBL from the point [0:…:0:1] to the hyper‑
+          plane u_{2n+1}=0, obtaining PBL and PRSBL in ℙ^{2n−1}.
+      4.  Determines the loci of points where the projected cubic
+          F = DefiningEquations(PBL)[1] has multiplicity at least 3
+          (S2) and at least 4 (S3) by successive vanishing of second
+          and third derivatives.
+
+  All four schemes are returned for subsequent geometric analysis.
+=====================================================================*/
+function PBL(n, FF)
+    Ps<[u]> := ProjectiveSpace(FF, 2*n);
+
+    // --- cubic forms that cut out the base locus ----------------------
+    A := &+[u[2*j]^3 + 3*u[2*j]^2*u[2*j+1] + 3*u[2*j]*u[2*j+1]^2
+             + 9*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
+    B := &+[u[2*j]^3 -   u[2*j]^2*u[2*j+1] + 3*u[2*j]*u[2*j+1]^2
+             - 3*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
+
+    BL   := Scheme(Ps, [A, B]);             // base locus
+    RSBL := ReducedSubscheme(SingularSubscheme(BL));
+
+    // --- projection from [0:…:0:1]  to  ℙ^{2n−1} ---------------------
+    Pt<[v]> := ProjectiveSpace(FF, 2*n-1);
+    proj    := map< Ps -> Pt | [u[i] : i in [1..2*n]] >;
+
+    PBL   := proj(BL);                      // projected base locus
+    PRSBL := proj(RSBL);                    // projected red. sing. locus
+
+    // --- F = defining cubic of PBL ------------------------------------
+    F := DefiningEquations(PBL)[1];
+
+    // All second‑order partials (for multiplicity ≥ 3)
+    Der2 := [];
+    for P in [Derivative(F, i) : i in [1..2*n]] do
+        for i in [1..2*n] do
+            Include(~Der2, Derivative(P, i));
+        end for;
+    end for;
+
+    S2 := Scheme(Pt, Der2);
+
+    // All third‑order partials (for multiplicity ≥ 4)
+    Der3 := [];
+    for P in Der2 do
+        for i in [1..2*n] do
+            Include(~Der3, Derivative(P, i));
+        end for;
+    end for;
+
+    S3 := Scheme(Pt, Der3);
+
+    return PBL, PRSBL, S2, S3;
 end function;
 
 // Example
@@ -317,33 +984,85 @@ IsSubscheme(Y,S2);
 IsSubscheme(Y,S3);
 end for;
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*=====================================================================
+  Quart  ―  Quartic linear system resolving the base locus of FerPar
+  -------------------------------------------------------------------
+  INPUT
+      n  : Positive integer.  Determines the source space  ℙ^{2n}_FF
+           and fixes the dimension of all schemes that occur.
 
-// Quart;
-// INPUT: a natural numbers n, and a field FF of characteristic different from 2 and 3;
-// OUTPUT: four objects BQ, g, Y, iaut where BQ is a basis of the linear system of quartic containing BL and having multiplcity two along RSBL, g is the rational map induced by BQ, Y is the image of g and iaut is the automorphism of the ambient projective space transforming Y in the Fermat cubic.
+      FF : A field with characteristic different from 2 and 3
+           (divisions by 2 and 3 enter the quartic formulas).
 
-Quart := function(n,FF)
-Ps<[u]> := ProjectiveSpace(FF,2*n);
-R := CoordinateRing(Ps);
-A := &+[u[2*j]^3+3*u[2*j]^2*u[2*j+1]+3*u[2*j]*u[2*j+1]^2+9*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
-B := &+[u[2*j]^3-u[2*j]^2*u[2*j+1]+3*u[2*j]*u[2*j+1]^2-3*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
-BL := Scheme(Ps,[A,B]);
-SBL := SingularSubscheme(BL);
-RSBL := ReducedSubscheme(SBL);
-J := IrrelevantIdeal(Ps);
-BQ := [f : f in Basis(Ideal(BL) meet Ideal(RSBL)^2 meet J^4) | Degree(f) eq 4];
-Pt<[x]> := ProjectiveSpace(FF,2*n+1);
-g := map<Ps->Pt | BQ>;
-Y := Image(g);
-ilist := [-x[1]-3*x[4],x[1]-3*x[4],x[2]+3*x[3],-x[2]+3*x[3]];
-for i in [2..n] do 
-ilist := Append(ilist,-x[2*i+1]-3*x[2*i+2]);
-ilist := Append(ilist,x[2*i+1]-3*x[2*i+2]);
-end for;
-iaut := map<Pt->Pt | ilist>;
-X := iaut(Y);
-return BQ,g,Y,iaut;
+  OUTPUT
+      BQ   : A sequence of quartic polynomials forming a basis of the
+             linear system
+                 L =  (Ideal(BL) ∩ Ideal(RSBL)² ∩ 𝔪⁴)_4,
+             i.e. quartics that
+               • vanish on the base locus   BL = V(A, B),
+               • have multiplicity ≥ 2 along its reduced singular locus
+                 RSBL, and
+               • live in degree 4 of the irrelevant ideal 𝔪 = ⟨u₁,…⟩.
+
+      g    : The rational map
+                 g : ℙ^{2n}_FF  –––➝  ℙ^{2n+1}_FF
+             induced by the basis  BQ.
+
+      Y    : The image scheme  Y = g(ℙ^{2n}) ⊂ ℙ^{2n+1}_FF.
+
+      iaut : A projective automorphism of  ℙ^{2n+1}_FF  that sends
+             Y  onto the standard Fermat cubic hypersurface
+                 Σ x_i³ = 0.
+
+  DESCRIPTION
+      • Re‑creates the base locus  BL  of the parametrisation `FerPar`
+        via the two cubics
+            A = Σ(u_{2j}³ + 3u_{2j}²u_{2j+1} + 3u_{2j}u_{2j+1}² + 9u_{2j+1}³)
+                + u₁³
+            B = Σ(u_{2j}³ − u_{2j}²u_{2j+1} + 3u_{2j}u_{2j+1}² − 3u_{2j+1}³)
+                + u₁³.
+      • Computes their singular locus  SBL  and its reduced part RSBL.
+      • Forms the intersection of ideals
+            I₄ = ( Ideal(BL) ∩ Ideal(RSBL)² ∩ 𝔪⁴ )_4
+        and extracts a basis  BQ  of its quartic component.
+      • The homogeneous coordinates defined by  BQ  give the map  g,
+        whose image is a cubic hypersurface  Y.
+      • Constructs an explicit linear change of coordinates (`iaut`)
+        that transforms  Y  into the classical Fermat cubic; this
+        demonstrates that the quartic system resolves  BL  and still
+        parameterises the same variety up to projective automorphism.
+=====================================================================*/
+function Quart(n, FF)
+    Ps<[u]> := ProjectiveSpace(FF, 2*n);
+
+    // --- cubics cutting out the base locus ----------------------------
+    A := &+[u[2*j]^3 + 3*u[2*j]^2*u[2*j+1] + 3*u[2*j]*u[2*j+1]^2
+             + 9*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
+    B := &+[u[2*j]^3 -   u[2*j]^2*u[2*j+1] + 3*u[2*j]*u[2*j+1]^2
+             - 3*u[2*j+1]^3 : j in [1..n]] + u[1]^3;
+
+    BL   := Scheme(Ps, [A, B]);
+    RSBL := ReducedSubscheme(SingularSubscheme(BL));
+
+    // --- quartic linear system with mult 2 along RSBL -----------------
+    J  := IrrelevantIdeal(Ps);
+    BQ := [f : f in Basis(Ideal(BL) meet Ideal(RSBL)^2 meet J^4)
+                 | Degree(f) eq 4];
+
+    // --- induced rational map and its image ---------------------------
+    Pt<[x]> := ProjectiveSpace(FF, 2*n+1);
+    g  := map< Ps -> Pt | BQ >;
+    Y  := Image(g);
+
+    // --- automorphism sending Y onto the standard Fermat cubic --------
+    ilist := [ -x[1]-3*x[4],  x[1]-3*x[4],  x[2]+3*x[3], -x[2]+3*x[3] ];
+    for i in [2..n] do
+        Append(~ilist, -x[2*i+1]-3*x[2*i+2]);
+        Append(~ilist,  x[2*i+1]-3*x[2*i+2]);
+    end for;
+    iaut := map< Pt -> Pt | ilist >;
+
+    return BQ, g, Y, iaut;
 end function;
 
 // Example
@@ -352,56 +1071,142 @@ n := 6;
 BQ,g,Y,iaut := Quart(n,FF);
 X := iaut(Y);
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*=====================================================================
+  NMD  ―  Recursive construction of the special polynomials
+          D_{2n}, N_{2n}, M_{2n} in  𝔽 [t₁,…,t_{2n}]
+  -------------------------------------------------------------------
+  INPUT
+      n  : Integer > 2.  Fixes the number 2 n of affine coordinates
+           t₁,…,t_{2 n} in which the three output polynomials live.
 
-// NMD;
-// INPUT: a natural numbers n > 2, and a field FF of characteristic different from 2 and 3;
-// OUTPUT: the polynomials M_2n, N_2n and D_2n.
+      FF : A ground field whose characteristic is neither 2 nor 3
+           (required by the explicit coefficients ±1, ±2, ±3).
 
-NMD := function(n,FF)
-A<[t]> := AffineSpace(FF,2*n);
+  OUTPUT                    (returned in this order)
+      N2n : The polynomial  N_{2 n}(t₁,…,t_{2 n}) ∈ FF[t₁,…,t_{2 n}].
 
-D2 := 2*t[1]^4 - 4*t[1]*t[2]^3 + 4*t[1]^3 - 2*t[2]^3 + 6*t[1]^2 + 4*t[1] + 2;
-D4 := 2*(t[1]^4*t[4]^3 - 3*t[1]^3*t[2]*t[3]*t[4]^2 + 3*t[1]^2*t[2]^2*t[3]^2*t[4] - t[1]*t[2]^3*t[3]^3 + 2*t[1]^3*t[4]^3 - 3*t[1]^2*t[2]*t[3]*t[4]^2 + t[2]^3*t[3]^3 + 3*t[1]^2*t[4]^3 - 3*t[1]*t[2]*t[3]*t[4]^2 - t[1]^4 + 2*t[1]*t[2]^3 + 2*t[1]*t[4]^3 - 2*t[1]^3 + t[2]^3 + t[4]^3 - 3*t[1]^2 - 2*t[1] - 1);
+      M2n : The polynomial  M_{2 n}(t₁,…,t_{2 n}) ∈ FF[t₁,…,t_{2 n}].
 
-listD := [D2,D4];
+      D2n : The polynomial  D_{2 n}(t₁,…,t_{2 n}) ∈ FF[t₁,…,t_{2 n}].
 
-for i in [3..n] do
-D2ip := 2*t[1]^4*t[2*i]^3 - 6*t[1]^3*t[2*i-1]*t[2]*t[2*i]^2 + 6*t[1]^2*t[2*i-1]^2*t[2]^2*t[2*i] - 2*t[1]*t[2*i-1]^3*t[2]^3 + 4*t[1]^3*t[2*i]^3 - 6*t[1]^2*t[2*i-1]*t[2]*t[2*i]^2 + 2*t[2*i-1]^3*t[2]^3 + 6*t[1]^2*t[2*i]^3 - 6*t[1]*t[2*i-1]*t[2]*t[2*i]^2 + 4*t[1]*t[2*i]^3 + 2*t[2*i]^3;
+  ALGORITHM / DESCRIPTION
+      •  Works in the affine coordinate ring  FF[t₁,…,t_{2 n}]  created
+         as  `AffineSpace(FF, 2*n)`.
+      •  Starts with explicit degree‑4 polynomials
+            D₂, N₂, M₂           (in t₁,t₂),
+            D₄, N₄, M₄           (in t₁,…,t₄),
+         hard‑coded in the function body.
+      •  For every k = 3,…,n it builds intermediate quartics
+            D_{2k}′, N_{2k}′, M_{2k}′
+         that mix the new pair (t_{2k−1}, t_{2k}) with the previous data
+         and then sets
+            D_{2k} = D_{2k}′ + D_{2k−2},
+            N_{2k} = N_{2k}′ + N_{2k−2},
+            M_{2k} = M_{2k}′ + M_{2k−2}.
+      •  The three lists `listD`, `listN`, `listM` therefore hold the
+         growing sequences (D₂, D₄, …, D_{2 n}), etc.
+      •  Finally returns the last entries  N_{2 n}, M_{2 n}, D_{2 n}.
+         (Note the order *N, M, D* in the return statement.)
 
-D2i := D2ip + listD[i-1];
-listD := Append(listD,D2i);
-end for;
-D2n := listD[# listD];
+      These polynomials arise in the study of the quartic linear system
+      that resolves the base locus of the even‑dimensional Fermat cubic
+      and feature in the description of its higher‑multiplicity strata.
+=====================================================================*/
+function NMD(n, FF)
+    A<[t]> := AffineSpace(FF, 2*n);
 
-N2 := -t[1]^4 - 2*t[1]^3 + t[2]^3 - 3*t[1]^2 - 2*t[1] - 1;
-N4 := 3*t[1]^2 + t[1]^4 + 2*t[1] - t[2]^3 + 2*t[1]^3 - t[4]^3 - 2*t[2]^2*t[3]^2*t[4] + 2*t[2]*t[3]*t[4]^2 + t[1]*t[2]^3*t[3]^3 - 4*t[1]*t[2]^2*t[3]^2*t[4] - 3*t[1]^2*t[2]^2*t[3]^2*t[4] + 5*t[1]^2*t[2]*t[3]*t[4]^2 + 5*t[1]*t[2]*t[3]*t[4]^2 + 3*t[1]^3*t[2]*t[3]*t[4]^2 + t[2]^3*t[3]^3 - t[1]^4*t[4]^3 - 2*t[1]^3*t[4]^3 - 3*t[1]^2*t[4]^3 - 2*t[1]*t[4]^3 + 1;
+    /* --- initial data D₂, D₄ --------------------------------------- */
+    D2 :=  2*t[1]^4 - 4*t[1]*t[2]^3 + 4*t[1]^3 - 2*t[2]^3
+           + 6*t[1]^2 + 4*t[1] + 2;
 
-listN := [N2,N4];
+    D4 := 2*( t[1]^4*t[4]^3 - 3*t[1]^3*t[2]*t[3]*t[4]^2
+              + 3*t[1]^2*t[2]^2*t[3]^2*t[4] - t[1]*t[2]^3*t[3]^3
+              + 2*t[1]^3*t[4]^3 - 3*t[1]^2*t[2]*t[3]*t[4]^2
+              + t[2]^3*t[3]^3 + 3*t[1]^2*t[4]^3
+              - 3*t[1]*t[2]*t[3]*t[4]^2 - t[1]^4 + 2*t[1]*t[2]^3
+              + 2*t[1]*t[4]^3 - 2*t[1]^3 + t[2]^3 + t[4]^3
+              - 3*t[1]^2 - 2*t[1] - 1 );
 
-for i in [3..n] do
-N2ip := t[2]^3*t[2*i-1]^3-2*t[1]^3*t[2*i]^3 - t[1]^4*t[2*i]^3 - 2*t[1]*t[2*i]^3 - 3*t[1]^2*t[2*i]^3 - t[2*i]^3 + t[1]*t[2]^3*t[2*i-1]^3 + 2*t[2]*t[2*i-1]*t[2*i]^2 - 2*t[2]^2*t[2*i-1]^2*t[2*i] + 3*t[1]^3*t[2]*t[2*i-1]*t[2*i]^2 + 5*t[1]^2*t[2]*t[2*i-1]*t[2*i]^2 + 5*t[1]*t[2]*t[2*i-1]*t[2*i]^2 - 3*t[1]^2*t[2]^2*t[2*i-1]^2*t[2*i] - 4*t[1]*t[2]^2*t[2*i-1]^2*t[2*i];
+    listD := [D2, D4];
 
-N2i := N2ip + listN[i-1];
-listN := Append(listN,N2i);
-end for;
+    /* --- build D_{2k}  for  k = 3 … n ------------------------------ */
+    for i in [3 .. n] do
+        D2ip := 2*t[1]^4*t[2*i]^3
+                - 6*t[1]^3*t[2*i-1]*t[2]*t[2*i]^2
+                + 6*t[1]^2*t[2*i-1]^2*t[2]^2*t[2*i]
+                - 2*t[1]*t[2*i-1]^3*t[2]^3
+                + 4*t[1]^3*t[2*i]^3
+                - 6*t[1]^2*t[2*i-1]*t[2]*t[2*i]^2
+                + 2*t[2*i-1]^3*t[2]^3
+                + 6*t[1]^2*t[2*i]^3
+                - 6*t[1]*t[2*i-1]*t[2]*t[2*i]^2
+                + 4*t[1]*t[2*i]^3 + 2*t[2*i]^3;
 
-N2n := listN[# listN];
+        Append(~listD, D2ip + listD[i-1]);
+    end for;
+    D2n := listD[#listD];
 
-M2 := t[1]^4 - 2*t[1]*t[2]^3 + 2*t[1]^3 - t[2]^3 + 3*t[1]^2 + 2*t[1] + 1;
-M4 := -t[1]*t[2]^3*t[3]^3 - t[1]^4 + 2*t[1]*t[2]^3 - 2*t[1]^3 + t[2]^3 - 3*t[1]^2 - 2*t[1] + t[1]^4*t[4]^3 + 2*t[1]^3*t[4]^3 + t[2]^3*t[3]^3 + 3*t[1]^2*t[4]^3 + 2*t[1]*t[4]^3 - 3*t[1]^3*t[2]*t[3]*t[4]^2 + 3*t[1]^2*t[2]^2*t[3]^2*t[4] - 3*t[1]^2*t[2]*t[3]*t[4]^2 - 3*t[1]*t[2]*t[3]*t[4]^2 + t[4]^3-1;
+    /* --- initial data N₂, N₄ --------------------------------------- */
+    N2 := -t[1]^4 - 2*t[1]^3 + t[2]^3 - 3*t[1]^2 - 2*t[1] - 1;
 
-listM := [M2,M4];
+    N4 :=  3*t[1]^2 + t[1]^4 + 2*t[1] - t[2]^3 + 2*t[1]^3
+           - t[4]^3 - 2*t[2]^2*t[3]^2*t[4] + 2*t[2]*t[3]*t[4]^2
+           + t[1]*t[2]^3*t[3]^3 - 4*t[1]*t[2]^2*t[3]^2*t[4]
+           - 3*t[1]^2*t[2]^2*t[3]^2*t[4] + 5*t[1]^2*t[2]*t[3]*t[4]^2
+           + 5*t[1]*t[2]*t[3]*t[4]^2 + 3*t[1]^3*t[2]*t[3]*t[4]^2
+           + t[2]^3*t[3]^3 - t[1]^4*t[4]^3 - 2*t[1]^3*t[4]^3
+           - 3*t[1]^2*t[4]^3 - 2*t[1]*t[4]^3 + 1;
 
-for i in [3..n] do
-M2ip := t[2*i]^3 - 3*t[1]^3*t[2]*t[2*i-1]*t[2*i]^2 + 3*t[1]^2*t[2]^2*t[2*i-1]^2*t[2*i] - t[1]*t[2]^3*t[2*i-1]^3 - 3*t[1]^2*t[2]*t[2*i-1]*t[2*i]^2 - 3*t[1]*t[2]*t[2*i-1]*t[2*i]^2 + t[1]^4*t[2*i]^3 + 2*t[1]^3*t[2*i]^3 + t[2]^3*t[2*i-1]^3 + 3*t[1]^2*t[2*i]^3 + 2*t[1]*t[2*i]^3;
+    listN := [N2, N4];
 
-M2i := M2ip + listM[i-1];
-listM := Append(listM,M2i);
-end for;
+    /* --- build N_{2k}  for  k = 3 … n ------------------------------ */
+    for i in [3 .. n] do
+        N2ip := t[2]^3*t[2*i-1]^3 - 2*t[1]^3*t[2*i]^3
+                - t[1]^4*t[2*i]^3 - 2*t[1]*t[2*i]^3
+                - 3*t[1]^2*t[2*i]^3 - t[2*i]^3
+                + t[1]*t[2]^3*t[2*i-1]^3
+                + 2*t[2]*t[2*i-1]*t[2*i]^2
+                - 2*t[2]^2*t[2*i-1]^2*t[2*i]
+                + 3*t[1]^3*t[2]*t[2*i-1]*t[2*i]^2
+                + 5*t[1]^2*t[2]*t[2*i-1]*t[2*i]^2
+                + 5*t[1]*t[2]*t[2*i-1]*t[2*i]^2
+                - 3*t[1]^2*t[2]^2*t[2*i-1]^2*t[2*i]
+                - 4*t[1]*t[2]^2*t[2*i-1]^2*t[2*i];
 
-M2n := listM[# listM];
-return N2n,M2n,D2n;
+        Append(~listN, N2ip + listN[i-1]);
+    end for;
+    N2n := listN[#listN];
+
+    /* --- initial data M₂, M₄ --------------------------------------- */
+    M2 :=  t[1]^4 - 2*t[1]*t[2]^3 + 2*t[1]^3 - t[2]^3
+           + 3*t[1]^2 + 2*t[1] + 1;
+
+    M4 := -t[1]*t[2]^3*t[3]^3 - t[1]^4 + 2*t[1]*t[2]^3 - 2*t[1]^3
+          + t[2]^3 - 3*t[1]^2 - 2*t[1] + t[1]^4*t[4]^3
+          + 2*t[1]^3*t[4]^3 + t[2]^3*t[3]^3 + 3*t[1]^2*t[4]^3
+          + 2*t[1]*t[4]^3 - 3*t[1]^3*t[2]*t[3]*t[4]^2
+          + 3*t[1]^2*t[2]^2*t[3]^2*t[4] - 3*t[1]^2*t[2]*t[3]*t[4]^2
+          - 3*t[1]*t[2]*t[3]*t[4]^2 + t[4]^3 - 1;
+
+    listM := [M2, M4];
+
+    /* --- build M_{2k}  for  k = 3 … n ------------------------------ */
+    for i in [3 .. n] do
+        M2ip :=  t[2*i]^3
+                 - 3*t[1]^3*t[2]*t[2*i-1]*t[2*i]^2
+                 + 3*t[1]^2*t[2]^2*t[2*i-1]^2*t[2*i]
+                 - t[1]*t[2]^3*t[2*i-1]^3
+                 - 3*t[1]^2*t[2]*t[2*i-1]*t[2*i]^2
+                 - 3*t[1]*t[2]*t[2*i-1]*t[2*i]^2
+                 + t[1]^4*t[2*i]^3 + 2*t[1]^3*t[2*i]^3
+                 + t[2]^3*t[2*i-1]^3 + 3*t[1]^2*t[2*i]^3
+                 + 2*t[1]*t[2*i]^3;
+
+        Append(~listM, M2ip + listM[i-1]);
+    end for;
+    M2n := listM[#listM];
+
+    return N2n, M2n, D2n;
 end function;
 
 // Example
@@ -409,12 +1214,35 @@ n := 4;
 FF := Rationals();
 N2n,M2n,D2n := NMD(n,FF);
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*===================================================================== 
+  Cr  ―  quadro‑cubic Cremona transformation in even projective space
+  -------------------------------------------------------------------
+  INPUT
+      n  : Integer > 2.  The source and target are both  ℙ^{2n}_FF.
+      FF : Ground field, char FF ≠ 2, 3  (division by 2 and 3 occurs).
 
-// Cr;
-// INPUT: a natural numbers n > 2, and a field FF of characteristic different from 2 and 3;
-// OUTPUT: the quadro-cubic Cremona transformation cr: P^{2n} ---> P^{2n} over the field FF and its inverse.
+  OUTPUT
+      cr     : Rational map           cr : ℙ^{2n}_FF  ⇢  ℙ^{2n}_FF
+               given by cubics in the first three coordinates (t₁,t₂,t₃)
+               and linear/cubic expressions in the remaining pairs.
+               The map is birational and of type (3, 2) on its base
+               locus, hence a Cremona transformation of bidegree (3, 3).
 
+      invcr  : Explicit rational inverse of  cr.  The two composita
+               cr ∘ invcr and invcr ∘ cr are both normalised to the
+               identity on the open sets where they are defined.
+
+  DESCRIPTION
+      * Builds the forward map  cr  by first assembling two helper
+        lists  g₁ and  g₂  of homogeneous coordinates and then adding
+        them term‑wise.
+      * Constructs  invcr  analogously, using the symmetry between the
+        two coordinate rings.
+      * Returns the pair  (cr, invcr)  so that composing them yields a
+        normalised identity on ℙ^{2n}.  The construction reproduces the
+        classical quadro‑cubic Cremona involution in every even
+        dimension ≥ 4. 
+=====================================================================*/
 Cr := function(n,FF)
 Ps<[u]> := ProjectiveSpace(FF,2*n);
 Pst<[t]> := ProjectiveSpace(FF,2*n);
@@ -525,7 +1353,6 @@ Qinvcr := Scheme(Pt,&+[Random(FF,10)*b : b in Dinvcr]);
 SQinvcr := SingularSubscheme(Qinvcr);
 Dimension(SQinvcr);
 IsSubscheme(SQinvcr,U1);
-
 for i in [1..100] do
 Qinvcr := Scheme(Pt,&+[Random(FF,100)*b : b in B2]);
 SQinvcr := SingularSubscheme(Qinvcr);
@@ -533,12 +1360,31 @@ Dimension(SQinvcr);
 IsSubscheme(SQinvcr,U1);
 end for;
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*=====================================================================
+  D8Par  ―  Degree‑8 birational parametrisation of a cubic hypersurface
+  -------------------------------------------------------------------
+  INPUT
+      n  : Integer ≥ 2.  Source is ℙ^{2n}_FF, target a cubic Xⁿ ⊂ ℙ^{2n+1}.
+      FF : Field with char FF ≠ 2, 3  (needed by numerical coefficients).
 
-// D8Par;
-// INPUT: a natural numbers n >= 2, and a field FF of characteristic different from 2 and 3;
-// OUTPUT: the birational paramatrization h: P^{2n} ---> X^n given by polynomials of degree 8.
+  OUTPUT
+      h  : Rational map
+              h : ℙ^{2n}_FF  ⇢  Xⁿ ⊂ ℙ^{2n+1}_FF ,
+           whose homogeneous coordinates are polynomials of total
+           degree 8 in the source variables.  The map is birational;
+           its construction factors through the quadro‑cubic Cremona
+           transformation `Cr` and the cubic map returned by `FerPar`.
 
+  DESCRIPTION
+      •  Re‑creates the two cubic forms  A  and  B  that define the base
+         locus of `FerPar`.
+      •  Constructs the cubic map  f : ℙ^{2n} ⇢ ℙ^{2n+1}  from  A, B.
+      •  Calls `Cr` to obtain the quadro‑cubic automorphism  cr and
+         composes  h = cr ∘ f.  Clearing denominators and normalisation
+         raise every coordinate to total degree 8.
+      •  Returns  h, which parameterises the same cubic X but has no
+         base points outside those forced by geometry. 
+=====================================================================*/
 D8Par := function(n,FF)
 Ps<[u]> := ProjectiveSpace(FF,2*n);
 R := CoordinateRing(Ps);
@@ -608,8 +1454,6 @@ FF := Rationals();
 n := 4;
 h := D8Par(n,FF);
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 // The following script produces the family of degree five del Pezzo surface S_t degenerating the the reducible surface S_0 give by the union of the Fermat cubic surface and two conjugate planes, and the family X_t of cubic 4-folds containing S_t and specializing to the fermat cubic 4-fold X_0.
 
 FF<t> := FunctionField(Rationals());
@@ -619,7 +1463,6 @@ f0 := -u0^3*u1 - u1^4 - 3*u0^3*u2 - 6*u1^2*u2^2 - 9*u2^4;
 f1 := u0^3*u1 + u1^4 - 3*u0^3*u2 + 6*u1^2*u2^2 + 9*u2^4;
 f2 := -u0^4 - u0*u1^3 + 3*u0*u1^2*u2 - 3*u0*u1*u2^2 + 9*u0*u2^3;
 f3 := u0^4 + u0*u1^3 + 3*u0*u1^2*u2 + 3*u0*u1*u2^2 + 9*u0*u2^3;
-
 f4 := t*(u0^4 - u1^4 - 6*u1^2*u2^2 - 9*u2^4);
 f5 := t*(u0^3*u1 + u1^4 + 6*u1^2*u2^2 + 9*u2^4);
 f6 := t*(u0^2*u1^2 - u1^4 + 3*u0^2*u2^2 - 6*u1^2*u2^2 - 9*u2^4);
@@ -646,12 +1489,31 @@ f := Inverse(qoppa);
 Df := ClearDenominators(DefiningEquations(f));
 Bf := BaseScheme(f);
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*=====================================================================
+  St  ―  fibre of the pencil of degree‑5 del Pezzo surfaces
+  -------------------------------------------------------------------
+  INPUT
+      u : Rational number (or any element of the ground field).
+          The routine specialises the parameter  t ↆ  u  in the family
+          Sₜ ⊂ ℙ⁵  defined in the enclosing script.
 
-// St;
-// INPUT: a rational numbers u;
-// OUTPUT: the fiber Su of the family of degree five del Pezzo surfaces S_t over t = u.
+  OUTPUT
+      Su : The three‑dimensional fibre  S_u ⊂ ℙ⁵_ℚ  of degree 5
+            obtained by intersecting the 6‑fold  St  ⊂ 𝔸⁷  with  {t=u}
+            and projecting to the last six affine coordinates
+            (y₀,…,y₅).  When  u ≠ 0 the fibre is a smooth del Pezzo;
+            for  u = 0  it degenerates to the union of the Fermat cubic
+            surface and two conjugate planes.
 
+  DESCRIPTION
+      •  Defines the affine seven‑fold  St ⊂ 𝔸⁷  by one cubic and five
+         quadratic equations.
+      •  Intersects  St  with  (t = u)  and keeps only the components
+         of dimension 3.
+      •  Maps the resulting scheme to ℙ⁵ via [y₀:…:y₅], returning the
+         del Pezzo surface (or its reducible limit) living in that
+         projective space.
+=====================================================================*/
 St := function(u)
 FF := Rationals();
 A<y0,y1,y2,y3,y4,y5,t> := AffineSpace(FF,7);
@@ -694,8 +1556,6 @@ Su := St(u);
 IrrSu := IrreducibleComponents(Su);
 [Dimension(Z) : Z in IrrSu];
 [Degree(Z) : Z in IrrSu];
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // The following script produces a birational map ht: P^4 ---> P^5 over k(t) whose image is the cubic 4-fold Xt := (x0^3 + x1^3 + x2^3 + x3^3 + t*x1*x4^2 + x4^3 + t*x2*x4*x5 - t*x1*x5^2 + t*x2*x5^2 + x5^3 = 0) and which specialized to a birational parametrization of the Fermat cubic 4-fold as t ---> 0. 
 // The computation of the inverse of qoppa is computationally difficult so it has been saved in the file "Spec_Proj_K3.ws" and can be restored with the command: restore "Spec_Proj_K3.ws";
@@ -768,8 +1628,6 @@ IRR := IrreducibleComponents(F0);
 K30 := Surface(P8,Ideal(IRR[1]));
 E0 := Surface(P8,Ideal(IRR[2]));
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 // The following script produces the specialization h0 of the birational map ht: P^4 ---> P^5 over in the previous script. The base scheme of ht specializes to the base scheme of h0 and the reduced subscheme of the base locus of h0 is a singular complete intersection of two cubics.
 // The script computes also the K3 surface in P^8 of which the base scheme of h0 is a linear projection from a 5-secant 3-plane. The computation for the smoothness of the K3 surface has been saved in the file "K0_Smoothness.ws" and can be restored with the command: restore "K0_Smoothness.ws";  
 
@@ -822,10 +1680,26 @@ IsInvertible(invproj);
 proj := Inverse(invproj);
 CP := BaseScheme(proj);
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*=====================================================================
+  Fiber  ―  pull‑back of a subscheme under a rational map
+  -------------------------------------------------------------------
+  INPUT
+      f : Rational map  P ⇢ Q.
+      Z : Subscheme of  Q.
 
-// The following script produces the variety Segpm which geometrically is the union of two Segre 3-folds containing the del Pezzo surface St. 
+  OUTPUT
+      X : The schematic fibre  f⁻¹(Z)  \  Base(f), realised inside
+          the source variety  P.  It is computed by evaluating the
+          defining ideal of  Z  in the homogeneous coordinates of  f
+          and removing the indeterminacy locus of  f.
 
+  DESCRIPTION
+      Helper utility used in the Segre‑three‑fold construction.
+      Given a map  f  and a subscheme  Z  of its target, it returns
+      the largest subscheme of the source on which the induced map
+      factors through  Z.  Points where  f  is undefined are excluded
+      via `Complement(..., Scheme(P, equ))`.
+=====================================================================*/
 Fiber := function(f,Z)
     equ := DefiningEquations(f);
     bas := MinimalBasis(Z);
@@ -833,6 +1707,8 @@ Fiber := function(f,Z)
     X := Scheme(P,[Evaluate(g,equ) : g in bas]);
     return Complement(X,Scheme(P,equ));
 end function;
+
+// The following script produces the variety Segpm which geometrically is the union of two Segre 3-folds containing the del Pezzo surface St. 
 
 Q<c> := QuadraticField(-3);
 
@@ -903,8 +1779,6 @@ Lm := Scheme(P4,BHm);
 L := Lp join Lm;
 Segpm := Fiber(g,L);
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 // The following script produces a birational map ht: P^4 ---> P^5 over k(t) whose image is the cubic 4-fold Xt := (x0^3 + x1^3 + x2^3 + x3^3 + t*x1*x4^2 + x4^3 + t^2*x0^2*x5 - t^2*x0*x2*x5 + t^2*x1*x2*x5 + t^2*x2^2*x5 + t^2*x0*x3*x5 - t^2*x2*x3*x5 - t*x0*x4*x5 + 3*t*x2*x4*x5 + t*x2*x5^2 - 2*t*x3*x5^2 + x5^3 = 0) and which specialized to a birational parametrization of the Fermat cubic 4-fold as t ---> 0. 
 
 FF<t> := FunctionField(Rationals());
@@ -961,8 +1835,6 @@ P8<z0,z1,z2,z3,z4,z5,z6,z7,z8> := ProjectiveSpace(FF,8);
 s := map<P4->P8 | BQ>;
 
 Kt := s(Bh);
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // The following script performs the computations of the previous script for a given value of t in Q. 
 
@@ -1021,5 +1893,3 @@ P8<z0,z1,z2,z3,z4,z5,z6,z7,z8> := ProjectiveSpace(FF,8);
 s := map<P4->P8 | BQ>;
 
 Kt := s(Bh);
-
-
